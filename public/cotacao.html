@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cotação – Brasão Gaúcho</title>
+  <style>
+    :root {
+      --bg:#0D0D0D; --card:#1E1E1E; --card2:#252525; --border:#2E2E2E;
+      --gold:#D4AF37; --orange:#E07820; --white:#F0F0F0; --gray:#888;
+      --success:#43A047; --danger:#E53935;
+    }
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:-apple-system,'Segoe UI',sans-serif;background:var(--bg);color:var(--white);min-height:100vh}
+    .header{background:#111;border-bottom:1px solid var(--border);padding:14px 20px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:10}
+    .h-logo{font-size:26px}
+    .h-title{font-size:15px;font-weight:800;letter-spacing:1px;color:var(--gold)}
+    .h-sub{font-size:11px;color:var(--gray);margin-top:1px}
+    .wrap{max-width:680px;margin:0 auto;padding:20px 16px 60px}
+    .info-box{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px 18px;margin-bottom:18px}
+    .info-row{display:flex;justify-content:space-between;align-items:center;padding:4px 0;font-size:13px}
+    .info-row+.info-row{border-top:1px solid var(--border)}
+    .il{color:var(--gray)}
+    .iv{font-weight:600}
+    .filled-notice{background:#43A04718;border:1px solid #43A04740;border-radius:8px;padding:10px 14px;font-size:13px;color:var(--success);margin-bottom:14px}
+    .sec-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--gold);margin:18px 0 10px}
+    .cat-bar{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--orange);padding:8px 0 5px;border-bottom:1px solid var(--border);margin-bottom:6px}
+    .prod-row{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-bottom:7px;display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center}
+    .pn{font-weight:600;font-size:14px}
+    .pm{font-size:11px;color:var(--gray);margin-top:2px}
+    .pq{font-size:12px;color:var(--gray);margin-top:3px}
+    .pg{display:flex;align-items:center;gap:5px}
+    .pl{font-size:12px;color:var(--gray);white-space:nowrap}
+    .pi{background:#111;border:1px solid var(--border);border-radius:6px;color:var(--white);padding:9px 10px;font-size:16px;width:115px;text-align:right;outline:none;transition:border-color .15s;-moz-appearance:textfield}
+    .pi::-webkit-outer-spin-button,.pi::-webkit-inner-spin-button{-webkit-appearance:none}
+    .pi:focus{border-color:var(--gold)}
+    .pi.ok{border-color:var(--success)}
+    .btn-sub{display:block;width:100%;background:var(--gold);color:#000;font-weight:800;font-size:16px;padding:16px;border:none;border-radius:10px;cursor:pointer;margin-top:24px;letter-spacing:.5px;transition:opacity .15s}
+    .btn-sub:hover{opacity:.9}
+    .btn-sub:disabled{opacity:.45;cursor:not-allowed}
+    .hint{font-size:12px;color:var(--gray);text-align:center;margin-top:10px;line-height:1.5}
+    .state{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:70vh;text-align:center;gap:14px;padding:32px}
+    .si{font-size:52px}
+    .st{font-size:20px;font-weight:700}
+    .sm{color:var(--gray);font-size:14px;line-height:1.6}
+    @media(max-width:480px){
+      .prod-row{grid-template-columns:1fr;gap:10px}
+      .pg{justify-content:flex-end}
+    }
+  </style>
+</head>
+<body>
+<div class="header">
+  <div class="h-logo">🔥</div>
+  <div>
+    <div class="h-title">BRASÃO GAÚCHO</div>
+    <div class="h-sub">Solicitação de Cotação</div>
+  </div>
+</div>
+<div id="root"></div>
+<script>
+  const token = location.pathname.replace(/\/+$/, '').split('/').pop();
+  let _data = null;
+
+  function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function fmt(d){ return new Date(d).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}); }
+
+  async function load(){
+    try{
+      const res = await fetch('/api/price-requests/'+token);
+      const data = await res.json();
+      if(!res.ok){ res.status===410 ? renderExpired(data.error) : renderError(data.error); return; }
+      _data = data;
+      renderForm(data);
+    }catch(e){ renderError('Erro de conexão. Verifique sua internet e tente novamente.'); }
+  }
+
+  function renderForm(d){
+    const grouped = {};
+    d.items.forEach(i => { const c=i.category_name||'Geral'; if(!grouped[c]) grouped[c]=[]; grouped[c].push(i); });
+
+    const filledNotice = d.last_filled_at
+      ? `<div class="filled-notice">✓ Preços já enviados em ${fmt(d.last_filled_at)}. Você pode enviar novamente para atualizar.</div>`
+      : '';
+
+    const rows = Object.entries(grouped).map(([cat,items]) => `
+      <div class="cat-bar">${esc(cat)}</div>
+      ${items.map(i => `
+        <div class="prod-row">
+          <div>
+            <div class="pn">${esc(i.product_name)}</div>
+            ${i.brand ? `<div class="pm">🏷 ${esc(i.brand)}</div>` : ''}
+            <div class="pq">Qtd solicitada: <strong>${i.quantity} ${esc(i.unit||'un')}</strong></div>
+          </div>
+          <div class="pg">
+            <span class="pl">R$</span>
+            <input type="number" step="0.01" min="0" inputmode="decimal" class="pi" id="p-${i.product_id}"
+              placeholder="0,00" value="${i.unit_price > 0 ? Number(i.unit_price).toFixed(2) : ''}"
+              oninput="mark(this)">
+          </div>
+        </div>`).join('')}
+    `).join('');
+
+    document.getElementById('root').innerHTML = `
+      <div class="wrap">
+        <div class="info-box">
+          <div class="info-row"><span class="il">Fornecedor</span><span class="iv">${esc(d.company_name)}</span></div>
+          <div class="info-row"><span class="il">Unidade</span><span class="iv">${esc(d.churrascaria_name)}</span></div>
+          ${d.title ? `<div class="info-row"><span class="il">Referência</span><span class="iv">${esc(d.title)}</span></div>` : ''}
+          <div class="info-row"><span class="il">Válido até</span><span class="iv">${fmt(d.expires_at)}</span></div>
+        </div>
+        ${filledNotice}
+        <div class="sec-title">Produtos (${d.items.length})</div>
+        ${rows}
+        <button class="btn-sub" id="btn-sub" onclick="submit()">Enviar Preços</button>
+        <p class="hint">Preencha apenas os produtos disponíveis.<br>Campos em branco serão ignorados.</p>
+      </div>`;
+  }
+
+  function mark(el){ el.classList.toggle('ok', parseFloat(el.value)>0); }
+
+  async function submit(){
+    const btn = document.getElementById('btn-sub');
+    const items = _data.items
+      .map(i => ({ product_id: i.product_id, unit_price: parseFloat(document.getElementById('p-'+i.product_id)?.value||0) }))
+      .filter(i => i.unit_price > 0);
+    if(!items.length){ alert('Preencha pelo menos um preço antes de enviar.'); return; }
+    btn.disabled = true; btn.textContent = 'Enviando...';
+    try{
+      const res = await fetch('/api/price-requests/'+token+'/submit',{
+        method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({items})
+      });
+      const data = await res.json();
+      if(!res.ok){ alert(data.error||'Erro ao enviar.'); btn.disabled=false; btn.textContent='Enviar Preços'; return; }
+      renderSuccess(items.length);
+    }catch(e){ alert('Erro de conexão.'); btn.disabled=false; btn.textContent='Enviar Preços'; }
+  }
+
+  function renderSuccess(n){
+    document.getElementById('root').innerHTML = `
+      <div class="state">
+        <div class="si">✅</div>
+        <div class="st">Preços Enviados!</div>
+        <div class="sm">${n} produto(s) enviado(s) com sucesso.<br>O Brasão Gaúcho receberá as informações automaticamente.<br><br>Obrigado!</div>
+      </div>`;
+  }
+  function renderExpired(msg){
+    document.getElementById('root').innerHTML = `
+      <div class="state">
+        <div class="si">⏰</div>
+        <div class="st">Link Expirado</div>
+        <div class="sm">${esc(msg)||'Este link de cotação não está mais disponível.'}<br>Entre em contato com o Brasão Gaúcho para um novo link.</div>
+      </div>`;
+  }
+  function renderError(msg){
+    document.getElementById('root').innerHTML = `
+      <div class="state">
+        <div class="si">❌</div>
+        <div class="st">Cotação não encontrada</div>
+        <div class="sm">${esc(msg)||'Verifique o link e tente novamente.'}</div>
+      </div>`;
+  }
+
+  load();
+</script>
+</body>
+</html>

@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Brasão Gaúcho · Pedidos</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+<!-- ── LOGIN ─────────────────────────────────────── -->
+<div id="login-page" style="display:none">
+  <div class="login-box">
+    <div class="login-logo">🔥</div>
+    <h1>BRASÃO GAÚCHO</h1>
+    <p>Sistema de Pedidos</p>
+    <form id="login-form">
+      <div class="form-group">
+        <label class="form-label">Email</label>
+        <input type="email" id="login-email" class="form-control" placeholder="seu@email.com" required>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Senha</label>
+        <input type="password" id="login-password" class="form-control" placeholder="••••••••" required>
+      </div>
+      <div id="login-error" style="color:#E53935;font-size:13px;margin-bottom:12px;display:none"></div>
+      <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;padding:13px">
+        Entrar
+      </button>
+    </form>
+  </div>
+</div>
+
+<!-- ── APP ───────────────────────────────────────── -->
+<div id="app-page" style="display:none">
+
+  <!-- Sidebar -->
+  <nav id="sidebar">
+    <div class="sidebar-header">
+      <div class="sidebar-logo">🔥</div>
+      <div class="sidebar-title">BRASÃO GAÚCHO</div>
+      <div class="sidebar-subtitle">Sistema de Pedidos</div>
+    </div>
+    <div id="nav-menu"></div>
+    <div class="sidebar-user">
+      <div class="sidebar-user-name" id="user-name"></div>
+      <div class="sidebar-user-role" id="user-role"></div>
+      <button class="btn btn-outline btn-sm" style="margin-top:8px;width:100%;justify-content:center" onclick="App.logout()">
+        Sair
+      </button>
+    </div>
+  </nav>
+
+  <!-- Main -->
+  <div id="main-content">
+    <div class="topbar">
+      <div style="display:flex;align-items:center;gap:12px">
+        <button id="menu-toggle" onclick="App.toggleMenu()">☰</button>
+        <span class="topbar-title" id="topbar-title">Dashboard</span>
+      </div>
+      <div class="topbar-right">
+        <button id="theme-toggle" onclick="Theme.toggle()"
+          style="background:none;border:1px solid var(--border);border-radius:8px;padding:6px 10px;cursor:pointer;font-size:16px;line-height:1;color:var(--gray);"
+          title="Alternar modo claro/escuro"></button>
+        <span style="color:var(--gray);font-size:13px" id="topbar-user"></span>
+      </div>
+    </div>
+
+    <!-- Dashboard -->
+    <div id="section-dashboard" class="section"></div>
+
+    <!-- Pedidos -->
+    <div id="section-orders" class="section"></div>
+
+    <!-- Novo Pedido -->
+    <div id="section-new-order" class="section"></div>
+
+    <!-- Cotações -->
+    <div id="section-quotations" class="section"></div>
+
+    <!-- Nova Cotação -->
+    <div id="section-new-quotation" class="section"></div>
+
+    <!-- Cotação Comparativa -->
+    <div id="section-comparative" class="section"></div>
+
+    <!-- Fornecedores -->
+    <div id="section-companies" class="section"></div>
+
+    <!-- Produtos -->
+    <div id="section-products" class="section"></div>
+
+    <!-- Categorias -->
+    <div id="section-categories" class="section"></div>
+
+    <!-- Relatórios -->
+    <div id="section-reports" class="section"></div>
+
+    <!-- Usuários -->
+    <div id="section-users" class="section"></div>
+  </div>
+</div>
+
+<!-- Toast container -->
+<div id="toast-container"></div>
+
+<!-- Modal container -->
+<div id="modal-container"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="/js/core/theme.js"></script>
+<script src="/js/core/api.js"></script>
+<script src="/js/core/app.js"></script>
+<script src="/js/components/dashboard.js"></script>
+<script src="/js/components/orders.js"></script>
+<script src="/js/components/quotations.js"></script>
+<script src="/js/components/companies.js"></script>
+<script src="/js/components/products.js"></script>
+<script src="/js/components/categories.js"></script>
+<script src="/js/components/reports.js"></script>
+<script src="/js/components/users.js"></script>
+<script src="/js/components/comparative.js"></script>
+<script src="/js/main.js"></script>
+</body>
+</html>
