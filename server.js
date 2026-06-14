@@ -16,9 +16,6 @@ const comparativeRoutes = require('./routes/comparative');
 const priceRequestsRoutes = require('./routes/price-requests');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
-
-initDatabase();
 
 app.use(cors());
 app.use(express.json());
@@ -43,10 +40,24 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-app.listen(PORT, () => {
-  console.log(`\n🔥 Brasão Gaúcho - Sistema de Pedidos`);
-  console.log(`✅ Servidor rodando em: http://localhost:${PORT}`);
-  console.log(`\n📋 Login inicial:`);
-  console.log(`   Email: admin@brasao.com`);
-  console.log(`   Senha: admin123\n`);
-});
+if (require.main === module) {
+  const PORT = process.env.PORT || 3000;
+  async function start() {
+    try {
+      await initDatabase();
+      app.listen(PORT, () => {
+        console.log(`\n🔥 Brasão Gaúcho - Sistema de Pedidos`);
+        console.log(`✅ Servidor rodando em: http://localhost:${PORT}`);
+        console.log(`\n📋 Login inicial:`);
+        console.log(`   Email: admin@brasao.com`);
+        console.log(`   Senha: admin123\n`);
+      });
+    } catch (err) {
+      console.error('❌ Erro ao conectar ao banco de dados:', err.message);
+      process.exit(1);
+    }
+  }
+  start();
+}
+
+module.exports = app;

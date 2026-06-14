@@ -1,29 +1,32 @@
 const express = require('express');
-const { getDb } = require('../database/db');
+const { pool } = require('../database/db');
 const { authMiddleware, requirePermission, getAllowedChurrascarias } = require('../middleware/auth');
 
 const router = express.Router();
 
-function churrSql(user) {
+function churrFilter(user, params) {
   const ids = getAllowedChurrascarias(user);
-  if (!ids) return { sql: '', params: [] };
-  return { sql: ` AND o.churrascaria_id IN (${ids.map(() => '?').join(',')})`, params: ids };
+  if (!ids) return '';
+  params.push(ids);
+  return ` AND o.churrascaria_id = ANY($${params.length}::int[])`;
 }
 
-router.get('/churrascarias', authMiddleware, (req, res) => {
-  const db = getDb();
+router.get('/churrascarias', authMiddleware, async (req, res) => {
   const ids = getAllowedChurrascarias(req.user);
-  if (ids) {
-    return res.json(db.prepare(
-      `SELECT * FROM churrascarias WHERE id IN (${ids.map(() => '?').join(',')}) ORDER BY name`
-    ).all(...ids));
+  try {
+    if (ids) {
+      const { rows } = await pool.query('SELECT * FROM churrascarias WHERE id = ANY($1::int[]) ORDER BY name', [ids]);
+      return res.json(rows);
+    }
+    const { rows } = await pool.query('SELECT * FROM churrascarias ORDER BY name');
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Erro interno' });
   }
-  res.json(db.prepare('SELECT * FROM churrascarias ORDER BY name').all());
 });
 
-router.get('/dashboard', authMiddleware, (req, res) => {
-  const db = getDb();
-  const cf = churrSql(req.user);
+router.get('/dashboard', authMiddleware, async (req, res) => {
   const ids = getAllowedChurrascarias(req.user);
 
   const today = new Date().toISOString().split('T')[0];
@@ -31,84 +34,74 @@ router.get('/dashboard', authMiddleware, (req, res) => {
   const monthStart = today.slice(0, 7) + '-01';
   const sevenDaysAgo = new Date(Date.now() - 6 * 86400000).toISOString().split('T')[0];
 
-  const todayStats = db.prepare(
-    `SELECT COUNT(*) as orders, COALESCE(SUM(total),0) as value FROM orders o WHERE DATE(o.created_at)=?${cf.sql}`
-  ).get(today, ...cf.params);
+  try {
+    const cfParams = ids ? [ids] : [];
+    const cfSql = ids ? ` AND o.churrascaria_id = ANY($${cfParams.length}::int[])` : '';
 
-  const yesterdayStats = db.prepare(
-    `SELECT COUNT(*) as orders, COALESCE(SUM(total),0) as value FROM orders o WHERE DATE(o.created_at)=?${cf.sql}`
-  ).get(yesterday, ...cf.params);
+    const [todayStats, yesterdayStats, monthStats, last7, byChurr, recentOrders, companyCount, productCount] = await Promise.all([
+      pool.query(`SELECT COUNT(*)::int as orders, COALESCE(SUM(total),0) as value FROM orders o WHERE o.created_at::date=$1${cfSql}`, [today, ...cfParams]),
+      pool.query(`SELECT COUNT(*)::int as orders, COALESCE(SUM(total),0) as value FROM orders o WHERE o.created_at::date=$1${cfSql}`, [yesterday, ...cfParams]),
+      pool.query(`SELECT COUNT(*)::int as orders, COALESCE(SUM(total),0) as value FROM orders o WHERE o.created_at::date>=$1${cfSql}`, [monthStart, ...cfParams]),
+      pool.query(`SELECT o.created_at::date as date, COUNT(*)::int as orders, COALESCE(SUM(total),0) as value FROM orders o WHERE o.created_at::date>=$1${cfSql} GROUP BY o.created_at::date ORDER BY date`, [sevenDaysAgo, ...cfParams]),
+      ids
+        ? pool.query(`SELECT ch.id, ch.name, COUNT(o.id)::int as orders, COALESCE(SUM(o.total),0) as value FROM churrascarias ch LEFT JOIN orders o ON o.churrascaria_id = ch.id WHERE ch.id = ANY($1::int[]) GROUP BY ch.id ORDER BY ch.name`, [ids])
+        : pool.query(`SELECT ch.id, ch.name, COUNT(o.id)::int as orders, COALESCE(SUM(o.total),0) as value FROM churrascarias ch LEFT JOIN orders o ON o.churrascaria_id = ch.id GROUP BY ch.id ORDER BY ch.name`),
+      pool.query(`SELECT o.id, o.total, o.created_at, ch.name as churrascaria_name, c.name as company_name, u.name as user_name FROM orders o JOIN churrascarias ch ON ch.id = o.churrascaria_id JOIN companies c ON c.id = o.company_id JOIN users u ON u.id = o.user_id WHERE 1=1${cfSql} ORDER BY o.created_at DESC LIMIT 8`, cfParams),
+      pool.query('SELECT COUNT(*)::int as cnt FROM companies WHERE active=1'),
+      pool.query('SELECT COUNT(*)::int as cnt FROM products WHERE active=1'),
+    ]);
 
-  const monthStats = db.prepare(
-    `SELECT COUNT(*) as orders, COALESCE(SUM(total),0) as value FROM orders o WHERE DATE(o.created_at)>=?${cf.sql}`
-  ).get(monthStart, ...cf.params);
-
-  const last7 = db.prepare(
-    `SELECT DATE(o.created_at) as date, COUNT(*) as orders, COALESCE(SUM(total),0) as value
-     FROM orders o WHERE DATE(o.created_at)>=?${cf.sql}
-     GROUP BY DATE(o.created_at) ORDER BY date`
-  ).all(sevenDaysAgo, ...cf.params);
-
-  const byChurrWhere = ids ? `WHERE ch.id IN (${ids.map(() => '?').join(',')})` : '';
-  const byChurr = db.prepare(`
-    SELECT ch.id, ch.name,
-           COUNT(o.id) as orders, COALESCE(SUM(o.total),0) as value
-    FROM churrascarias ch
-    LEFT JOIN orders o ON o.churrascaria_id = ch.id
-    ${byChurrWhere}
-    GROUP BY ch.id ORDER BY ch.name
-  `).all(...(ids || []));
-
-  const recentOrders = db.prepare(`
-    SELECT o.id, o.total, o.created_at,
-           ch.name as churrascaria_name, c.name as company_name, u.name as user_name
-    FROM orders o
-    JOIN churrascarias ch ON ch.id = o.churrascaria_id
-    JOIN companies c ON c.id = o.company_id
-    JOIN users u ON u.id = o.user_id
-    WHERE 1=1${cf.sql}
-    ORDER BY o.created_at DESC LIMIT 8
-  `).all(...cf.params);
-
-  const companyCount = db.prepare('SELECT COUNT(*) as cnt FROM companies WHERE active=1').get().cnt;
-  const productCount = db.prepare('SELECT COUNT(*) as cnt FROM products WHERE active=1').get().cnt;
-
-  res.json({ todayStats, yesterdayStats, monthStats, last7, byChurr, recentOrders, companyCount, productCount });
+    res.json({
+      todayStats: todayStats.rows[0],
+      yesterdayStats: yesterdayStats.rows[0],
+      monthStats: monthStats.rows[0],
+      last7: last7.rows,
+      byChurr: byChurr.rows,
+      recentOrders: recentOrders.rows,
+      companyCount: companyCount.rows[0].cnt,
+      productCount: productCount.rows[0].cnt,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Erro interno' });
+  }
 });
 
-router.get('/by-company', authMiddleware, requirePermission('view_reports'), (req, res) => {
-  const db = getDb();
+router.get('/by-company', authMiddleware, requirePermission('view_reports'), async (req, res) => {
   const { churrascaria_id, from, to } = req.query;
-  const cf = churrSql(req.user);
+  const params = [];
   let query = `
     SELECT c.name as company_name, ch.name as churrascaria_name,
-           COUNT(DISTINCT o.id) as total_orders, SUM(o.total) as total_value,
-           SUM(oi_count.item_count) as total_items
+           COUNT(DISTINCT o.id)::int as total_orders, COALESCE(SUM(o.total),0) as total_value,
+           COALESCE(SUM(oi_count.item_count),0)::int as total_items
     FROM orders o
     JOIN companies c ON c.id = o.company_id
     JOIN churrascarias ch ON ch.id = o.churrascaria_id
-    LEFT JOIN (SELECT order_id, COUNT(*) as item_count FROM order_items GROUP BY order_id) oi_count ON oi_count.order_id = o.id
+    LEFT JOIN (SELECT order_id, COUNT(*)::int as item_count FROM order_items GROUP BY order_id) oi_count ON oi_count.order_id = o.id
     WHERE 1=1
   `;
-  const params = [];
-  if (churrascaria_id) { query += ' AND o.churrascaria_id = ?'; params.push(churrascaria_id); }
-  if (from) { query += ' AND DATE(o.created_at) >= ?'; params.push(from); }
-  if (to) { query += ' AND DATE(o.created_at) <= ?'; params.push(to); }
-  query += cf.sql;
-  params.push(...cf.params);
-  query += ' GROUP BY c.id, ch.id ORDER BY total_value DESC';
-  res.json(db.prepare(query).all(...params));
+  if (churrascaria_id) { params.push(churrascaria_id); query += ` AND o.churrascaria_id = $${params.length}`; }
+  if (from) { params.push(from); query += ` AND o.created_at::date >= $${params.length}`; }
+  if (to) { params.push(to); query += ` AND o.created_at::date <= $${params.length}`; }
+  query += churrFilter(req.user, params);
+  query += ' GROUP BY c.id, c.name, ch.id, ch.name ORDER BY total_value DESC';
+  try {
+    const { rows } = await pool.query(query, params);
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Erro interno' });
+  }
 });
 
-router.get('/by-product', authMiddleware, requirePermission('view_reports'), (req, res) => {
-  const db = getDb();
+router.get('/by-product', authMiddleware, requirePermission('view_reports'), async (req, res) => {
   const { churrascaria_id, from, to, company_id } = req.query;
-  const cf = churrSql(req.user);
+  const params = [];
   let query = `
     SELECT p.name as product_name, p.unit, cat.name as category_name,
            c.name as company_name, ch.name as churrascaria_name,
-           SUM(oi.quantity) as total_quantity, SUM(oi.subtotal) as total_value,
-           AVG(oi.unit_price) as avg_price, COUNT(*) as order_count
+           COALESCE(SUM(oi.quantity),0) as total_quantity, COALESCE(SUM(oi.subtotal),0) as total_value,
+           COALESCE(AVG(oi.unit_price),0) as avg_price, COUNT(*)::int as order_count
     FROM order_items oi
     JOIN products p ON p.id = oi.product_id
     LEFT JOIN categories cat ON cat.id = p.category_id
@@ -117,37 +110,40 @@ router.get('/by-product', authMiddleware, requirePermission('view_reports'), (re
     JOIN churrascarias ch ON ch.id = o.churrascaria_id
     WHERE 1=1
   `;
-  const params = [];
-  if (churrascaria_id) { query += ' AND o.churrascaria_id = ?'; params.push(churrascaria_id); }
-  if (company_id) { query += ' AND o.company_id = ?'; params.push(company_id); }
-  if (from) { query += ' AND DATE(o.created_at) >= ?'; params.push(from); }
-  if (to) { query += ' AND DATE(o.created_at) <= ?'; params.push(to); }
-  query += cf.sql;
-  params.push(...cf.params);
-  query += ' GROUP BY p.id, c.id, ch.id ORDER BY total_value DESC';
-  res.json(db.prepare(query).all(...params));
+  if (churrascaria_id) { params.push(churrascaria_id); query += ` AND o.churrascaria_id = $${params.length}`; }
+  if (company_id) { params.push(company_id); query += ` AND o.company_id = $${params.length}`; }
+  if (from) { params.push(from); query += ` AND o.created_at::date >= $${params.length}`; }
+  if (to) { params.push(to); query += ` AND o.created_at::date <= $${params.length}`; }
+  query += churrFilter(req.user, params);
+  query += ' GROUP BY p.id, p.name, p.unit, cat.name, c.id, c.name, ch.id, ch.name ORDER BY total_value DESC';
+  try {
+    const { rows } = await pool.query(query, params);
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Erro interno' });
+  }
 });
 
-router.get('/summary', authMiddleware, requirePermission('view_reports'), (req, res) => {
-  const db = getDb();
+router.get('/summary', authMiddleware, requirePermission('view_reports'), async (req, res) => {
   const { churrascaria_id, from, to } = req.query;
-  const cf = churrSql(req.user);
   const params = [];
   let where = '1=1';
-  if (churrascaria_id) { where += ' AND o.churrascaria_id = ?'; params.push(churrascaria_id); }
-  if (from) { where += ' AND DATE(o.created_at) >= ?'; params.push(from); }
-  if (to) { where += ' AND DATE(o.created_at) <= ?'; params.push(to); }
-  where += cf.sql.replace(/^ AND /, ' AND ');
-  params.push(...cf.params);
-
-  const totals = db.prepare(`SELECT COUNT(*) as orders, SUM(total) as value FROM orders o WHERE ${where}`).get(...params);
-  const byChurr = db.prepare(`
-    SELECT ch.name, COUNT(*) as orders, SUM(o.total) as value
-    FROM orders o JOIN churrascarias ch ON ch.id = o.churrascaria_id
-    WHERE ${where} GROUP BY ch.id
-  `).all(...params);
-
-  res.json({ totals, byChurrascaria: byChurr });
+  if (churrascaria_id) { params.push(churrascaria_id); where += ` AND o.churrascaria_id = $${params.length}`; }
+  if (from) { params.push(from); where += ` AND o.created_at::date >= $${params.length}`; }
+  if (to) { params.push(to); where += ` AND o.created_at::date <= $${params.length}`; }
+  const cfExtra = churrFilter(req.user, params);
+  if (cfExtra) where += cfExtra.replace(/^ AND /, ' AND ');
+  try {
+    const [totals, byChurr] = await Promise.all([
+      pool.query(`SELECT COUNT(*)::int as orders, COALESCE(SUM(total),0) as value FROM orders o WHERE ${where}`, params),
+      pool.query(`SELECT ch.name, COUNT(*)::int as orders, COALESCE(SUM(o.total),0) as value FROM orders o JOIN churrascarias ch ON ch.id = o.churrascaria_id WHERE ${where} GROUP BY ch.id, ch.name`, params),
+    ]);
+    res.json({ totals: totals.rows[0], byChurrascaria: byChurr.rows });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Erro interno' });
+  }
 });
 
 module.exports = router;

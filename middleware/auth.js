@@ -1,19 +1,19 @@
 const jwt = require('jsonwebtoken');
-const { getDb } = require('../database/db');
+const { pool } = require('../database/db');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'brasao-gaucho-secret-2024';
 
-function authMiddleware(req, res, next) {
+async function authMiddleware(req, res, next) {
   const authHeader = req.headers.authorization;
   const token = authHeader && authHeader.split(' ')[1];
   if (!token) return res.status(401).json({ error: 'Token não fornecido' });
 
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
-    const db = getDb();
-    const user = db.prepare('SELECT * FROM users WHERE id = ? AND active = 1').get(decoded.id);
+    const { rows } = await pool.query('SELECT * FROM users WHERE id = $1 AND active = 1', [decoded.id]);
+    const user = rows[0];
     if (!user) return res.status(401).json({ error: 'Usuário não encontrado' });
-    user.permissions = JSON.parse(user.permissions || '{}');
+    user.permissions = user.permissions || {};
     req.user = user;
     next();
   } catch {
