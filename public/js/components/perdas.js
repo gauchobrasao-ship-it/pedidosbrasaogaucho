@@ -4,6 +4,7 @@
 const Perdas = {
   _products: [],
   _churrascarias: [],
+  _savedState: null,
 
   async load() {
     const el = document.getElementById('section-perdas');
@@ -14,8 +15,8 @@ const Perdas = {
         API.get('/products'),
         API.get('/reports/churrascarias'),
       ]);
-      this._products      = products      || [];
-      this._churrascarias = churrs        || [];
+      this._products      = products || [];
+      this._churrascarias = churrs   || [];
       this._render(el, perdas);
     } catch (err) {
       el.innerHTML = `<div class="empty-state text-danger">${err.message}</div>`;
@@ -30,7 +31,6 @@ const Perdas = {
           <span class="card-title">Controle de Perdas</span>
           <button class="btn btn-primary" onclick="Perdas.openForm()">+ Registrar Perda</button>
         </div>
-
         <div class="search-bar mb-16">
           <select class="form-control" id="pe-filter-churr" style="max-width:200px" onchange="Perdas._applyFilter()">
             <option value="">Todas as unidades</option>
@@ -40,10 +40,7 @@ const Perdas = {
           <input type="date" class="form-control" id="pe-to"   style="max-width:160px" onchange="Perdas._applyFilter()">
           <button class="btn btn-outline btn-sm" onclick="Perdas._clearFilter()">Limpar</button>
         </div>
-
-        <div id="pe-table-wrap">
-          ${this._renderTable(perdas)}
-        </div>
+        <div id="pe-table-wrap">${this._renderTable(perdas)}</div>
       </div>`;
   },
 
@@ -72,10 +69,10 @@ const Perdas = {
   },
 
   async _applyFilter() {
-    const churrId   = document.getElementById('pe-filter-churr')?.value || '';
-    const from      = document.getElementById('pe-from')?.value || '';
-    const to        = document.getElementById('pe-to')?.value || '';
-    const params    = new URLSearchParams();
+    const churrId = document.getElementById('pe-filter-churr')?.value || '';
+    const from    = document.getElementById('pe-from')?.value || '';
+    const to      = document.getElementById('pe-to')?.value   || '';
+    const params  = new URLSearchParams();
     if (churrId) params.set('churrascaria_id', churrId);
     if (from)    params.set('from', from);
     if (to)      params.set('to', to);
@@ -86,72 +83,156 @@ const Perdas = {
   },
 
   _clearFilter() {
-    ['pe-filter-churr','pe-from','pe-to'].forEach(id => {
+    ['pe-filter-churr', 'pe-from', 'pe-to'].forEach(id => {
       const el = document.getElementById(id);
       if (el) el.value = '';
     });
     this._applyFilter();
   },
 
+  // Salva os valores atuais do formulário antes de abrir o cadastro de produto
+  _saveState() {
+    this._savedState = {
+      data:    document.getElementById('pe-data')?.value    || '',
+      func:    document.getElementById('pe-func')?.value    || '',
+      churrId: document.getElementById('pe-churr')?.value   || '',
+      prodId:  document.getElementById('pe-prod')?.value    || '',
+      qty:     document.getElementById('pe-qty')?.value     || '',
+      motivo:  document.getElementById('pe-motivo')?.value  || '',
+    };
+  },
+
   openForm() {
-    const churrs   = this._churrascarias;
+    const s       = this._savedState || {};
+    this._savedState = null;
+    const churrs  = this._churrascarias;
     const products = this._products;
-    const today    = new Date().toISOString().split('T')[0];
+    const today   = new Date().toISOString().split('T')[0];
 
     showModal('Registrar Perda', `
       <div class="form-group">
         <label class="form-label">Data *</label>
-        <input type="date" id="pe-data" class="form-control" value="${today}">
+        <input type="date" id="pe-data" class="form-control" value="${s.data || today}">
       </div>
       <div class="form-group">
         <label class="form-label">Funcionário *</label>
-        <input type="text" id="pe-func" class="form-control" placeholder="Nome do funcionário...">
+        <input type="text" id="pe-func" class="form-control"
+          value="${escHtml(s.func || '')}" placeholder="Nome do funcionário...">
       </div>
       <div class="form-group">
         <label class="form-label">Churrascaria</label>
         <select id="pe-churr" class="form-control">
           <option value="">Selecione...</option>
-          ${churrs.map(c => `<option value="${c.id}">${escHtml(c.name)}</option>`).join('')}
+          ${churrs.map(c => `<option value="${c.id}" ${String(c.id) === String(s.churrId) ? 'selected' : ''}>${escHtml(c.name)}</option>`).join('')}
         </select>
       </div>
       <div class="form-group">
         <label class="form-label">Produto *</label>
-        <select id="pe-prod" class="form-control">
+        <select id="pe-prod" class="form-control" onchange="Perdas._updateUnit()">
           <option value="">Selecione o produto...</option>
-          ${products.map(p => `<option value="${p.id}" data-unit="${escHtml(p.unit||'un')}">${escHtml(p.name)}</option>`).join('')}
+          ${products.map(p => `<option value="${p.id}" data-unit="${escHtml(p.unit || 'un')}"
+            ${String(p.id) === String(s.prodId) ? 'selected' : ''}>${escHtml(p.name)}</option>`).join('')}
         </select>
+        <button type="button" class="btn btn-outline btn-sm" style="margin-top:6px;width:100%"
+          onclick="Perdas.openNewProduct()">+ Novo Produto</button>
       </div>
       <div class="form-group">
-        <label class="form-label">Quantidade * <span id="pe-unit-label" style="color:var(--gray);font-weight:400"></span></label>
-        <input type="number" id="pe-qty" class="form-control" step="0.001" min="0" placeholder="0">
+        <label class="form-label">
+          Quantidade * <span id="pe-unit-label" style="color:var(--gray);font-weight:400;font-size:12px"></span>
+        </label>
+        <input type="number" id="pe-qty" class="form-control" step="0.001" min="0"
+          value="${escHtml(s.qty || '')}" placeholder="0">
       </div>
       <div class="form-group">
         <label class="form-label">Motivo</label>
-        <input type="text" id="pe-motivo" class="form-control" placeholder="Ex: vencimento, queda, deterioração...">
+        <input type="text" id="pe-motivo" class="form-control"
+          value="${escHtml(s.motivo || '')}" placeholder="Ex: vencimento, queda, deterioração...">
       </div>`,
       `<button class="btn btn-outline" onclick="closeModal()">Cancelar</button>
        <button class="btn btn-primary" onclick="Perdas.save()">Registrar</button>`
     );
 
-    document.getElementById('pe-func').focus();
-    document.getElementById('pe-prod').addEventListener('change', function() {
-      const opt = this.selectedOptions[0];
-      const unit = opt?.dataset?.unit || '';
-      document.getElementById('pe-unit-label').textContent = unit ? `(${unit})` : '';
-    });
+    // Foca no campo adequado
+    if (s.prodId) {
+      this._updateUnit();
+      document.getElementById('pe-qty').focus();
+    } else {
+      document.getElementById('pe-func').focus();
+    }
+  },
+
+  _updateUnit() {
+    const sel = document.getElementById('pe-prod');
+    const opt = sel?.selectedOptions[0];
+    const unit = opt?.dataset?.unit || '';
+    const lbl = document.getElementById('pe-unit-label');
+    if (lbl) lbl.textContent = unit ? `(${unit})` : '';
+  },
+
+  // Abre mini-formulário de cadastro de produto
+  async openNewProduct() {
+    this._saveState();
+    try {
+      const [cats] = await Promise.all([API.get('/categories')]);
+      const units = ['un','kg','g','cx','lt','ml','pc','saco','fardo','bd'];
+      showModal('Novo Produto', `
+        <p style="font-size:13px;color:var(--gray);margin-bottom:16px">
+          Cadastre o produto e ele será selecionado automaticamente no registro de perda.
+        </p>
+        <div class="form-group">
+          <label class="form-label">Nome *</label>
+          <input class="form-control" id="pe-np-name" placeholder="Nome do produto...">
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Categoria</label>
+            <select class="form-control" id="pe-np-cat">
+              <option value="">Sem categoria</option>
+              ${(cats || []).map(c => `<option value="${c.id}">${escHtml(c.name)}</option>`).join('')}
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Unidade</label>
+            <select class="form-control" id="pe-np-unit">
+              ${units.map(u => `<option ${u === 'un' ? 'selected' : ''}>${u}</option>`).join('')}
+            </select>
+          </div>
+        </div>`,
+        `<button class="btn btn-outline" onclick="Perdas.openForm()">← Voltar à perda</button>
+         <button class="btn btn-primary" onclick="Perdas._saveNewProduct()">Criar e Selecionar</button>`
+      );
+      document.getElementById('pe-np-name').focus();
+    } catch (err) {
+      toast(err.message, 'error');
+    }
+  },
+
+  async _saveNewProduct() {
+    const name = document.getElementById('pe-np-name').value.trim();
+    const cat  = document.getElementById('pe-np-cat').value;
+    const unit = document.getElementById('pe-np-unit').value;
+    if (!name) { toast('Informe o nome do produto', 'error'); return; }
+    try {
+      const result = await API.post('/products', { name, category_id: cat || null, unit });
+      toast(`Produto "${name}" criado!`);
+      // Atualiza a lista de produtos e volta ao formulário com o novo produto selecionado
+      this._products = await API.get('/products');
+      if (this._savedState) this._savedState.prodId = result.id;
+      this.openForm();
+    } catch (err) { toast(err.message, 'error'); }
   },
 
   async save() {
-    const data        = document.getElementById('pe-data').value;
+    const data       = document.getElementById('pe-data').value;
     const funcionario = document.getElementById('pe-func').value.trim();
-    const churrId     = document.getElementById('pe-churr').value;
-    const prodId      = document.getElementById('pe-prod').value;
-    const quantidade  = parseFloat(document.getElementById('pe-qty').value);
-    const motivo      = document.getElementById('pe-motivo').value.trim();
+    const churrId    = document.getElementById('pe-churr').value;
+    const prodId     = document.getElementById('pe-prod').value;
+    const quantidade = parseFloat(document.getElementById('pe-qty').value);
+    const motivo     = document.getElementById('pe-motivo').value.trim();
 
-    if (!data)          { toast('Informe a data', 'error'); return; }
-    if (!funcionario)   { toast('Informe o funcionário', 'error'); return; }
-    if (!prodId)        { toast('Selecione o produto', 'error'); return; }
+    if (!data)                        { toast('Informe a data', 'error'); return; }
+    if (!funcionario)                 { toast('Informe o funcionário', 'error'); return; }
+    if (!prodId)                      { toast('Selecione o produto', 'error'); return; }
     if (!quantidade || quantidade <= 0) { toast('Informe uma quantidade válida', 'error'); return; }
 
     try {
@@ -159,7 +240,8 @@ const Perdas = {
         data, funcionario,
         churrascaria_id: churrId || null,
         produto_id: parseInt(prodId),
-        quantidade, motivo: motivo || null
+        quantidade,
+        motivo: motivo || null,
       });
       toast('Perda registrada!');
       closeModal();
