@@ -80,7 +80,7 @@ router.get('/:token', async (req, res) => {
     }
 
     const { rows: items } = await pool.query(`
-      SELECT pri.product_id, pri.quantity, pri.unit_price,
+      SELECT pri.product_id, pri.quantity, pri.unit_price, pri.bulk_min_qty, pri.bulk_price,
              p.name as product_name, p.unit, p.brand, cat.name as category_name
       FROM price_request_items pri
       JOIN products p ON p.id = pri.product_id
@@ -97,7 +97,7 @@ router.get('/:token', async (req, res) => {
 });
 
 router.post('/:token/submit', async (req, res) => {
-  const { items } = req.body;
+  const { items, vendor_notes } = req.body;
   if (!items?.length) return res.status(400).json({ error: 'Nenhum preço informado' });
 
   try {
@@ -111,7 +111,9 @@ router.post('/:token/submit', async (req, res) => {
 
     await withTransaction(async (client) => {
       for (const item of filled) {
-        const price = parseFloat(item.unit_price);
+        const price     = parseFloat(item.unit_price);
+        const bulkQty   = parseFloat(item.bulk_min_qty) > 0 ? parseFloat(item.bulk_min_qty) : null;
+        const bulkPrice = parseFloat(item.bulk_price)   > 0 ? parseFloat(item.bulk_price)   : null;
         await client.query(`
           INSERT INTO company_products (churrascaria_id, company_id, product_id, price, active)
           VALUES ($1,$2,$3,$4,1)
@@ -119,11 +121,16 @@ router.post('/:token/submit', async (req, res) => {
           DO UPDATE SET price = EXCLUDED.price, updated_at = NOW()
         `, [request.churrascaria_id, request.company_id, item.product_id, price]);
         await client.query(
-          'UPDATE price_request_items SET unit_price = $1 WHERE request_id = $2 AND product_id = $3',
-          [price, request.id, item.product_id]
+          `UPDATE price_request_items
+           SET unit_price = $1, bulk_min_qty = $2, bulk_price = $3
+           WHERE request_id = $4 AND product_id = $5`,
+          [price, bulkQty, bulkPrice, request.id, item.product_id]
         );
       }
-      await client.query('UPDATE price_requests SET last_filled_at = NOW() WHERE id = $1', [request.id]);
+      await client.query(
+        'UPDATE price_requests SET last_filled_at = NOW(), vendor_notes = $1 WHERE id = $2',
+        [vendor_notes?.trim() || null, request.id]
+      );
     });
 
     res.json({ message: 'Preços enviados com sucesso!' });

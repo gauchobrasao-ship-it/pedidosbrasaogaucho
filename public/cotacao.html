@@ -35,6 +35,16 @@
     .pi::-webkit-outer-spin-button,.pi::-webkit-inner-spin-button{-webkit-appearance:none}
     .pi:focus{border-color:var(--gold)}
     .pi.ok{border-color:var(--success)}
+    .pi-sm{background:#111;border:1px solid var(--border);border-radius:6px;color:var(--white);padding:7px 8px;font-size:14px;width:85px;text-align:right;outline:none;-moz-appearance:textfield}
+    .pi-sm::-webkit-outer-spin-button,.pi-sm::-webkit-inner-spin-button{-webkit-appearance:none}
+    .pi-sm:focus{border-color:var(--gold)}
+    .bulk-row{display:flex;align-items:center;gap:5px;margin-top:8px;flex-wrap:wrap}
+    .bulk-label{font-size:11px;color:var(--gray);white-space:nowrap}
+    .notes-wrap{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-top:18px}
+    .notes-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--gold);margin-bottom:10px}
+    .notes-ta{width:100%;background:#111;border:1px solid var(--border);border-radius:6px;color:var(--white);padding:10px 12px;font-size:14px;font-family:inherit;resize:vertical;min-height:90px;outline:none;line-height:1.5}
+    .notes-ta:focus{border-color:var(--gold)}
+    .notes-hint{font-size:11px;color:var(--gray);margin-top:6px;line-height:1.5}
     .btn-sub{display:block;width:100%;background:var(--gold);color:#000;font-weight:800;font-size:16px;padding:16px;border:none;border-radius:10px;cursor:pointer;margin-top:24px;letter-spacing:.5px;transition:opacity .15s}
     .btn-sub:hover{opacity:.9}
     .btn-sub:disabled{opacity:.45;cursor:not-allowed}
@@ -86,17 +96,28 @@
     const rows = Object.entries(grouped).map(([cat,items]) => `
       <div class="cat-bar">${esc(cat)}</div>
       ${items.map(i => `
-        <div class="prod-row">
-          <div>
-            <div class="pn">${esc(i.product_name)}</div>
-            ${i.brand ? `<div class="pm">🏷 ${esc(i.brand)}</div>` : ''}
-            <div class="pq">Qtd solicitada: <strong>${i.quantity} ${esc(i.unit||'un')}</strong></div>
+        <div class="prod-row" style="grid-template-columns:1fr;gap:10px">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap">
+            <div>
+              <div class="pn">${esc(i.product_name)}</div>
+              ${i.brand ? `<div class="pm">🏷 ${esc(i.brand)}</div>` : ''}
+              <div class="pq">Qtd solicitada: <strong>${i.quantity} ${esc(i.unit||'un')}</strong></div>
+            </div>
+            <div class="pg">
+              <span class="pl">R$ unit.</span>
+              <input type="number" step="0.01" min="0" inputmode="decimal" class="pi" id="p-${i.product_id}"
+                placeholder="0,00" value="${i.unit_price > 0 ? Number(i.unit_price).toFixed(2) : ''}"
+                oninput="mark(this)">
+            </div>
           </div>
-          <div class="pg">
-            <span class="pl">R$</span>
-            <input type="number" step="0.01" min="0" inputmode="decimal" class="pi" id="p-${i.product_id}"
-              placeholder="0,00" value="${i.unit_price > 0 ? Number(i.unit_price).toFixed(2) : ''}"
-              oninput="mark(this)">
+          <div class="bulk-row">
+            <span class="bulk-label">Preço por volume: a partir de</span>
+            <input type="number" step="1" min="1" inputmode="numeric" class="pi-sm" id="bq-${i.product_id}"
+              placeholder="qtd" value="${i.bulk_min_qty > 0 ? i.bulk_min_qty : ''}">
+            <span class="bulk-label">${esc(i.unit||'un')} por R$</span>
+            <input type="number" step="0.01" min="0" inputmode="decimal" class="pi-sm" id="bp-${i.product_id}"
+              placeholder="0,00" value="${i.bulk_price > 0 ? Number(i.bulk_price).toFixed(2) : ''}">
+            <span class="bulk-label">(opcional)</span>
           </div>
         </div>`).join('')}
     `).join('');
@@ -112,6 +133,12 @@
         ${filledNotice}
         <div class="sec-title">Produtos (${d.items.length})</div>
         ${rows}
+        <div class="notes-wrap">
+          <div class="notes-title">Ofertas e Observações</div>
+          <textarea class="notes-ta" id="vendor-notes"
+            placeholder="Ofereça produtos não listados, condições especiais, prazos de entrega ou qualquer observação relevante..."></textarea>
+          <div class="notes-hint">Este campo é opcional. Use para sugerir novos produtos ou informar condições especiais.</div>
+        </div>
         <button class="btn-sub" id="btn-sub" onclick="submit()">Enviar Preços</button>
         <p class="hint">Preencha apenas os produtos disponíveis.<br>Campos em branco serão ignorados.</p>
       </div>`;
@@ -122,13 +149,19 @@
   async function submit(){
     const btn = document.getElementById('btn-sub');
     const items = _data.items
-      .map(i => ({ product_id: i.product_id, unit_price: parseFloat(document.getElementById('p-'+i.product_id)?.value||0) }))
+      .map(i => ({
+        product_id:   i.product_id,
+        unit_price:   parseFloat(document.getElementById('p-'+i.product_id)?.value||0),
+        bulk_min_qty: parseFloat(document.getElementById('bq-'+i.product_id)?.value||0),
+        bulk_price:   parseFloat(document.getElementById('bp-'+i.product_id)?.value||0),
+      }))
       .filter(i => i.unit_price > 0);
     if(!items.length){ alert('Preencha pelo menos um preço antes de enviar.'); return; }
+    const vendor_notes = document.getElementById('vendor-notes')?.value?.trim() || null;
     btn.disabled = true; btn.textContent = 'Enviando...';
     try{
       const res = await fetch('/api/price-requests/'+token+'/submit',{
-        method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({items})
+        method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({items, vendor_notes})
       });
       const data = await res.json();
       if(!res.ok){ alert(data.error||'Erro ao enviar.'); btn.disabled=false; btn.textContent='Enviar Preços'; return; }
