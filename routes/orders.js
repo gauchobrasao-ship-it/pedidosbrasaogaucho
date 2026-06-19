@@ -130,28 +130,20 @@ router.delete('/:id', authMiddleware, requirePermission('view_orders'), async (r
   }
 });
 
-router.get('/:id/pdf', (req, res, next) => {
-  if (!req.headers.authorization && req.query.token) {
-    req.headers.authorization = `Bearer ${req.query.token}`;
-  }
-  next();
-}, authMiddleware, requirePermission('view_orders'), async (req, res) => {
-  const params = [req.params.id];
-  let query = `
-    SELECT o.*, ch.name as churrascaria_name, ch.address as churrascaria_address,
-           ch.phone as churrascaria_phone, ch.cnpj as churrascaria_cnpj,
-           c.name as company_name, c.cnpj as company_cnpj, c.phone as company_phone,
-           c.email as company_email, c.address as company_address, c.contact_name as company_contact,
-           u.name as user_name
-    FROM orders o
-    JOIN churrascarias ch ON ch.id = o.churrascaria_id
-    JOIN companies c ON c.id = o.company_id
-    JOIN users u ON u.id = o.user_id
-    WHERE o.id = $1
-  `;
-  query += buildChurrFilter(req.user, params);
+router.get('/:id/pdf', async (req, res) => {
   try {
-    const { rows } = await pool.query(query, params);
+    const { rows } = await pool.query(`
+      SELECT o.*, ch.name as churrascaria_name, ch.address as churrascaria_address,
+             ch.phone as churrascaria_phone, ch.cnpj as churrascaria_cnpj,
+             c.name as company_name, c.cnpj as company_cnpj, c.phone as company_phone,
+             c.email as company_email, c.address as company_address, c.contact_name as company_contact,
+             u.name as user_name
+      FROM orders o
+      JOIN churrascarias ch ON ch.id = o.churrascaria_id
+      JOIN companies c ON c.id = o.company_id
+      JOIN users u ON u.id = o.user_id
+      WHERE o.id = $1
+    `, [req.params.id]);
     const order = rows[0];
     if (!order) return res.status(404).json({ error: 'Pedido não encontrado' });
 
