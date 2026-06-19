@@ -57,7 +57,14 @@ const Products = {
                   ? `<span class="badge" style="background:${p.category_color||'#E07820'}22;color:${p.category_color||'#E07820'};border-color:${p.category_color||'#E07820'}44">${escHtml(p.category_name)}</span>`
                   : '<span class="text-gray">-</span>'}</td>
                 <td><span class="badge badge-gray">${escHtml(p.unit||'un')}</span></td>
-                <td><span class="badge badge-orange">${p.company_count} empresa(s)</span></td>
+                <td>${(() => {
+                  const names = p.company_names || [];
+                  if (!names.length) return '<span class="text-gray" style="font-size:13px">—</span>';
+                  const visible = names.slice(0, 3);
+                  const extra = names.length - 3;
+                  return visible.map(n => `<div style="font-size:12px;color:var(--white);line-height:1.6">${escHtml(n)}</div>`).join('')
+                    + (extra > 0 ? `<div style="font-size:11px;color:var(--gray)">e mais ${extra}</div>` : '');
+                })()}</td>
                 <td>${p.min_price != null && p.company_count > 0
                   ? `<div style="font-weight:600;color:var(--gold);font-size:13px">${fmtMoney(p.min_price)}</div>
                      <div style="font-size:11px;color:var(--gray);margin-top:2px">${escHtml(p.min_price_company||'')}</div>`

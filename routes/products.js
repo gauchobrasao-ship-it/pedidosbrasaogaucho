@@ -16,7 +16,13 @@ router.get('/', authMiddleware, async (req, res) => {
              JOIN companies co ON co.id = cp2.company_id
              WHERE cp2.product_id = p.id AND cp2.active = 1 AND co.active = 1
              ORDER BY cp2.price ASC LIMIT 1
-           ) as min_price_company
+           ) as min_price_company,
+           (
+             SELECT array_agg(co.name ORDER BY co.name)
+             FROM company_products cp2
+             JOIN companies co ON co.id = cp2.company_id
+             WHERE cp2.product_id = p.id AND cp2.active = 1 AND co.active = 1
+           ) as company_names
     FROM products p
     LEFT JOIN categories cat ON cat.id = p.category_id
     LEFT JOIN company_products cp ON cp.product_id = p.id AND cp.active = 1
