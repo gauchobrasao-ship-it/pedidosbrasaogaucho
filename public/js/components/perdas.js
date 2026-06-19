@@ -128,20 +128,20 @@ const Perdas = {
     const data       = document.getElementById('pe-data').value;
     const funcionario = document.getElementById('pe-func').value.trim();
     const churrId    = document.getElementById('pe-churr').value;
-    const prodId     = document.getElementById('pe-prod').value;
+    const produto    = document.getElementById('pe-prod').value.trim();
     const quantidade = parseFloat(document.getElementById('pe-qty').value);
     const motivo     = document.getElementById('pe-motivo').value.trim();
 
-    if (!data)                        { toast('Informe a data', 'error'); return; }
-    if (!funcionario)                 { toast('Informe o funcionário', 'error'); return; }
-    if (!prodId)                      { toast('Selecione o produto', 'error'); return; }
+    if (!data)                          { toast('Informe a data', 'error'); return; }
+    if (!funcionario)                   { toast('Informe o funcionário', 'error'); return; }
+    if (!produto)                       { toast('Informe o produto', 'error'); return; }
     if (!quantidade || quantidade <= 0) { toast('Informe uma quantidade válida', 'error'); return; }
 
     try {
       await API.post('/perdas', {
         data, funcionario,
         churrascaria_id: churrId || null,
-        produto_id: parseInt(prodId),
+        produto,
         quantidade,
         motivo: motivo || null,
       });
