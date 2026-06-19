@@ -13,10 +13,10 @@ router.post('/login', async (req, res) => {
   try {
     const { rows } = await pool.query('SELECT * FROM users WHERE email = $1 AND active = 1', [email.toLowerCase()]);
     const user = rows[0];
-    if (!user) return res.status(401).json({ error: 'Email ou senha incorretos' });
+    if (!user) return res.status(401).json({ error: 'E-mail não encontrado. Verifique e tente novamente.' });
 
     const valid = bcrypt.compareSync(password, user.password_hash);
-    if (!valid) return res.status(401).json({ error: 'Email ou senha incorretos' });
+    if (!valid) return res.status(401).json({ error: 'Senha incorreta. Tente novamente.' });
 
     const token = jwt.sign({ id: user.id, role: user.role }, JWT_SECRET, { expiresIn: '12h' });
 
