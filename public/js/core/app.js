@@ -72,7 +72,7 @@ const App = {
 
     const titles = {
       dashboard:'Dashboard', orders:'Pedidos', 'new-order':'Novo Pedido',
-      quotations:'Cotações', 'new-quotation':'Nova Cotação',
+      quotations:'Cotações', 'new-quotation':'Nova Cotação', 'price-request':'Pedido de Cotação',
       comparative:'Cotação Comparativa',
       companies:'Fornecedores', products:'Produtos', categories:'Categorias',
       reports:'Relatórios', users:'Usuários'
