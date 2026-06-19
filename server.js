@@ -14,6 +14,7 @@ const quotationsRoutes = require('./routes/quotations');
 const reportsRoutes = require('./routes/reports');
 const comparativeRoutes = require('./routes/comparative');
 const priceRequestsRoutes = require('./routes/price-requests');
+const perdasRoutes = require('./routes/perdas');
 
 const app = express();
 
@@ -31,6 +32,7 @@ app.use('/api/quotations', quotationsRoutes);
 app.use('/api/reports', reportsRoutes);
 app.use('/api/comparative', comparativeRoutes);
 app.use('/api/price-requests', priceRequestsRoutes);
+app.use('/api/perdas', perdasRoutes);
 
 app.get('/cotacao/:token', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'cotacao.html'));

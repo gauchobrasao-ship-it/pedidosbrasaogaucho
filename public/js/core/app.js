@@ -10,6 +10,7 @@ const ROUTES = {
   '/produtos':     'products',
   '/categorias':   'categories',
   '/relatorios':   'reports',
+  '/perdas':       'perdas',
   '/usuarios':     'users',
 };
 
@@ -22,6 +23,7 @@ const SEC_TO_PATH = {
   products:    '/produtos',
   categories:  '/categorias',
   reports:     '/relatorios',
+  perdas:      '/perdas',
   users:       '/usuarios',
 };
 
@@ -96,6 +98,7 @@ const App = {
       { id: 'products',    label: 'Produtos',        icon: '📦', perm: 'manage_products' },
       { id: 'categories',  label: 'Categorias',      icon: '🏷️',  perm: 'manage_categories' },
       { id: 'reports',     label: 'Relatórios',      icon: '📈', perm: 'view_reports' },
+      { id: 'perdas',      label: 'Controle de Perdas', icon: '📉', always: true },
       { id: 'users',       label: 'Usuários',        icon: '👥', adminOnly: true },
     ];
     document.getElementById('nav-menu').innerHTML = items
@@ -164,6 +167,7 @@ const App = {
       products:         'Produtos',
       categories:       'Categorias',
       reports:          'Relatórios',
+      perdas:           'Controle de Perdas',
       users:            'Usuários',
     };
     document.getElementById('topbar-title').textContent = titles[sec] || '';
@@ -179,6 +183,7 @@ const App = {
       case 'categories':  Categories.load(); break;
       case 'comparative': Comparative.load(); break;
       case 'reports':     Reports.load(); break;
+      case 'perdas':      Perdas.load(); break;
       case 'users':       Users.load(); break;
     }
   },
