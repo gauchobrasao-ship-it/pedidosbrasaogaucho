@@ -26,8 +26,8 @@ const Quotations = {
     const tab = this._tab;
     el.innerHTML = `
       <div class="card-tabs">
-        <button class="tab-btn ${tab === 'requests' ? 'active' : ''}" onclick="Quotations.load('requests')">Pedidos de Cotação</button>
-        <button class="tab-btn ${tab === 'internal' ? 'active' : ''}" onclick="Quotations.load('internal')">Cotações Internas</button>
+        <button class="tab-btn ${tab === 'requests' ? 'active' : ''}" onclick="Quotations.load('requests')">Cotação Externa</button>
+        <button class="tab-btn ${tab === 'internal' ? 'active' : ''}" onclick="Quotations.load('internal')">Cotação Interna</button>
       </div>
       <div id="qt-content" style="margin-top:20px"></div>`;
     const content = document.getElementById('qt-content');
@@ -40,8 +40,8 @@ const Quotations = {
     el.innerHTML = `
       <div class="card">
         <div class="card-header">
-          <span class="card-title">Pedidos Enviados aos Fornecedores</span>
-          <button class="btn btn-primary" onclick="PriceRequest.openNew()">+ Novo Pedido</button>
+          <span class="card-title">Cotação Externa</span>
+          <button class="btn btn-primary" onclick="PriceRequest.openNew()">+ Nova Cotação</button>
         </div>
         ${!requests?.length
           ? `<div class="empty-state">
@@ -86,7 +86,7 @@ const Quotations = {
     el.innerHTML = `
       <div class="card">
         <div class="card-header">
-          <span class="card-title">Cotações de Preços Internas</span>
+          <span class="card-title">Cotação Interna</span>
           <button class="btn btn-primary" onclick="Quotations.openNew()">+ Nova Cotação</button>
         </div>
         ${!quotations?.length
@@ -277,8 +277,8 @@ const PriceRequest = {
     el.innerHTML = `
       <div style="max-width:820px">
         <div class="flex align-center flex-gap mb-16">
-          <button class="btn btn-outline btn-sm" onclick="Quotations.load('requests')">← Voltar</button>
-          <h2 class="text-gold">Novo Pedido de Cotação</h2>
+          <button class="btn btn-outline btn-sm" onclick="App.navigate('quotations')">← Voltar</button>
+          <h2 class="text-gold">Nova Cotação Externa</h2>
         </div>
 
         <div class="card mb-16">
