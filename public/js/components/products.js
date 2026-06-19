@@ -47,7 +47,7 @@ const Products = {
           ${!products || products.length === 0
             ? '<div class="empty-state"><div class="empty-icon">📦</div><p>Nenhum produto encontrado</p></div>'
             : `<div class="table-wrap"><table>
-              <thead><tr><th>Produto</th><th>Categoria</th><th>Unidade</th><th>Fornecedores</th><th>Ações</th></tr></thead>
+              <thead><tr><th>Produto</th><th>Categoria</th><th>Unidade</th><th>Fornecedores</th><th>Menor Preço</th><th>Ações</th></tr></thead>
               <tbody>${products.map(p => `<tr>
                 <td>
                   <strong>${escHtml(p.name)}</strong>
@@ -58,6 +58,10 @@ const Products = {
                   : '<span class="text-gray">-</span>'}</td>
                 <td><span class="badge badge-gray">${escHtml(p.unit||'un')}</span></td>
                 <td><span class="badge badge-orange">${p.company_count} empresa(s)</span></td>
+                <td>${p.min_price != null && p.company_count > 0
+                  ? `<div style="font-weight:600;color:var(--gold);font-size:13px">${fmtMoney(p.min_price)}</div>
+                     <div style="font-size:11px;color:var(--gray);margin-top:2px">${escHtml(p.min_price_company||'')}</div>`
+                  : '<span class="text-gray" style="font-size:13px">—</span>'}</td>
                 <td>
                   ${App.canDo('manage_products') ? `
                   <div class="flex flex-gap">

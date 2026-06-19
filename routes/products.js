@@ -9,7 +9,14 @@ router.get('/', authMiddleware, async (req, res) => {
   const params = [];
   let query = `
     SELECT p.*, cat.name as category_name, cat.color as category_color,
-           COUNT(DISTINCT cp.company_id)::int as company_count
+           COUNT(DISTINCT cp.company_id)::int as company_count,
+           MIN(cp.price) as min_price,
+           (
+             SELECT co.name FROM company_products cp2
+             JOIN companies co ON co.id = cp2.company_id
+             WHERE cp2.product_id = p.id AND cp2.active = 1 AND co.active = 1
+             ORDER BY cp2.price ASC LIMIT 1
+           ) as min_price_company
     FROM products p
     LEFT JOIN categories cat ON cat.id = p.category_id
     LEFT JOIN company_products cp ON cp.product_id = p.id AND cp.active = 1
