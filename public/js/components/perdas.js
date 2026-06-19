@@ -27,7 +27,7 @@ const Perdas = {
           <span class="card-title">Controle de Perdas</span>
           <button class="btn btn-primary" onclick="Perdas.openForm()">+ Registrar Perda</button>
         </div>
-        <div class="search-bar mb-16">
+        <div class="search-bar mb-8">
           <select class="form-control" id="pe-filter-churr" style="max-width:200px" onchange="Perdas._applyFilter()">
             <option value="">Todas as unidades</option>
             ${churrs.map(c => `<option value="${c.id}">${escHtml(c.name)}</option>`).join('')}
@@ -35,6 +35,15 @@ const Perdas = {
           <input type="date" class="form-control" id="pe-from" style="max-width:160px" onchange="Perdas._applyFilter()">
           <input type="date" class="form-control" id="pe-to"   style="max-width:160px" onchange="Perdas._applyFilter()">
           <button class="btn btn-outline btn-sm" onclick="Perdas._clearFilter()">Limpar</button>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px">
+          ${['mes-atual','mes-passado','3-meses','6-meses'].map(k => `
+            <button class="btn btn-outline btn-sm pe-period" data-period="${k}"
+              onclick="Perdas._setPeriod('${k}')">${
+                k === 'mes-atual'   ? 'Mês atual' :
+                k === 'mes-passado' ? 'Mês passado' :
+                k === '3-meses'     ? 'Últimos 3 meses' : 'Últimos 6 meses'
+              }</button>`).join('')}
         </div>
         <div id="pe-table-wrap">${this._renderTable(perdas)}</div>
       </div>`;
@@ -78,11 +87,42 @@ const Perdas = {
     } catch (err) { toast(err.message, 'error'); }
   },
 
+  _setPeriod(period) {
+    const now   = new Date();
+    const pad   = n => String(n).padStart(2, '0');
+    const ymd   = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+    let from, to;
+
+    if (period === 'mes-atual') {
+      from = ymd(new Date(now.getFullYear(), now.getMonth(), 1));
+      to   = ymd(new Date(now.getFullYear(), now.getMonth() + 1, 0));
+    } else if (period === 'mes-passado') {
+      from = ymd(new Date(now.getFullYear(), now.getMonth() - 1, 1));
+      to   = ymd(new Date(now.getFullYear(), now.getMonth(), 0));
+    } else if (period === '3-meses') {
+      from = ymd(new Date(now.getFullYear(), now.getMonth() - 2, 1));
+      to   = ymd(new Date(now.getFullYear(), now.getMonth() + 1, 0));
+    } else if (period === '6-meses') {
+      from = ymd(new Date(now.getFullYear(), now.getMonth() - 5, 1));
+      to   = ymd(new Date(now.getFullYear(), now.getMonth() + 1, 0));
+    }
+
+    document.getElementById('pe-from').value = from;
+    document.getElementById('pe-to').value   = to;
+
+    document.querySelectorAll('.pe-period').forEach(b =>
+      b.classList.toggle('btn-primary', b.dataset.period === period)
+    );
+
+    this._applyFilter();
+  },
+
   _clearFilter() {
     ['pe-filter-churr', 'pe-from', 'pe-to'].forEach(id => {
       const el = document.getElementById(id);
       if (el) el.value = '';
     });
+    document.querySelectorAll('.pe-period').forEach(b => b.classList.remove('btn-primary'));
     this._applyFilter();
   },
 
