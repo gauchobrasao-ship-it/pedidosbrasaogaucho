@@ -44,7 +44,7 @@ router.get('/:id/products', authMiddleware, async (req, res) => {
   try {
     const { rows } = await pool.query(`
       SELECT p.id, p.name, p.unit, c.name as category_name, c.color as category_color,
-             cp.price, cp.updated_at
+             cp.price, cp.bulk_min_qty, cp.bulk_price, cp.updated_at
       FROM company_products cp
       JOIN products p ON p.id = cp.product_id
       LEFT JOIN categories c ON c.id = p.category_id

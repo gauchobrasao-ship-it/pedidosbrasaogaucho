@@ -213,6 +213,12 @@ const Orders = {
         <div class="product-order-row">
           <div>
             <div class="product-order-name">${escHtml(p.name)}</div>
+            ${p.bulk_min_qty && p.bulk_price
+              ? `<div style="font-size:11px;color:var(--gold);margin-top:3px">
+                   🏷 A partir de ${p.bulk_min_qty} ${escHtml(p.unit||'un')}: ${fmtMoney(p.bulk_price)}
+                 </div>`
+              : ''}
+            <div id="bulk-badge-${p.id}" style="display:none;font-size:11px;color:var(--success);margin-top:2px">✓ Desconto por volume aplicado</div>
           </div>
           <div class="product-order-unit">${escHtml(p.unit || 'un')}</div>
           <div class="product-order-price">
@@ -222,7 +228,7 @@ const Orders = {
           </div>
           <div class="product-order-qty">
             <input type="number" step="0.001" min="0" class="form-control"
-              id="qty-${p.id}" placeholder="Qtd" oninput="Orders.calcTotal()">
+              id="qty-${p.id}" placeholder="Qtd" oninput="Orders._checkBulk(${p.id})">
           </div>
         </div>`).join('')}
     `).join('');
@@ -270,6 +276,22 @@ const Orders = {
       if (obsEl && this.state.observations) obsEl.value = this.state.observations;
       this.calcTotal();
     }
+  },
+
+  _checkBulk(id) {
+    const p = this.state.products?.find(x => x.id === id);
+    if (!p) { this.calcTotal(); return; }
+    const qty     = parseFloat(document.getElementById(`qty-${id}`)?.value || 0);
+    const priceEl = document.getElementById(`price-${id}`);
+    const badge   = document.getElementById(`bulk-badge-${id}`);
+    if (p.bulk_min_qty && p.bulk_price && qty >= parseFloat(p.bulk_min_qty)) {
+      if (priceEl) priceEl.value = parseFloat(p.bulk_price).toFixed(2);
+      if (badge)   badge.style.display = 'block';
+    } else {
+      if (priceEl) priceEl.value = parseFloat(p.price || 0).toFixed(2);
+      if (badge)   badge.style.display = 'none';
+    }
+    this.calcTotal();
   },
 
   calcTotal() {

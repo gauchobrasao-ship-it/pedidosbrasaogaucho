@@ -62,6 +62,36 @@ router.get('/', authMiddleware, async (req, res) => {
   }
 });
 
+router.get('/:id/detail', authMiddleware, async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT pr.id, pr.token, pr.title, pr.expires_at, pr.last_filled_at, pr.vendor_notes,
+             ch.name as churrascaria_name, c.name as company_name
+      FROM price_requests pr
+      JOIN churrascarias ch ON ch.id = pr.churrascaria_id
+      JOIN companies c ON c.id = pr.company_id
+      WHERE pr.id = $1
+    `, [req.params.id]);
+    const request = rows[0];
+    if (!request) return res.status(404).json({ error: 'Cotação não encontrada' });
+
+    const { rows: items } = await pool.query(`
+      SELECT pri.product_id, pri.quantity, pri.unit_price, pri.bulk_min_qty, pri.bulk_price,
+             p.name as product_name, p.unit, p.brand, cat.name as category_name
+      FROM price_request_items pri
+      JOIN products p ON p.id = pri.product_id
+      LEFT JOIN categories cat ON cat.id = p.category_id
+      WHERE pri.request_id = $1
+      ORDER BY cat.name, p.name
+    `, [request.id]);
+
+    res.json({ ...request, items });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
 router.get('/:token', async (req, res) => {
   try {
     const { rows } = await pool.query(`
@@ -115,11 +145,11 @@ router.post('/:token/submit', async (req, res) => {
         const bulkQty   = parseFloat(item.bulk_min_qty) > 0 ? parseFloat(item.bulk_min_qty) : null;
         const bulkPrice = parseFloat(item.bulk_price)   > 0 ? parseFloat(item.bulk_price)   : null;
         await client.query(`
-          INSERT INTO company_products (churrascaria_id, company_id, product_id, price, active)
-          VALUES ($1,$2,$3,$4,1)
+          INSERT INTO company_products (churrascaria_id, company_id, product_id, price, bulk_min_qty, bulk_price, active)
+          VALUES ($1,$2,$3,$4,$5,$6,1)
           ON CONFLICT (churrascaria_id, company_id, product_id)
-          DO UPDATE SET price = EXCLUDED.price, updated_at = NOW()
-        `, [request.churrascaria_id, request.company_id, item.product_id, price]);
+          DO UPDATE SET price = EXCLUDED.price, bulk_min_qty = EXCLUDED.bulk_min_qty, bulk_price = EXCLUDED.bulk_price, updated_at = NOW()
+        `, [request.churrascaria_id, request.company_id, item.product_id, price, bulkQty, bulkPrice]);
         await client.query(
           `UPDATE price_request_items
            SET unit_price = $1, bulk_min_qty = $2, bulk_price = $3

@@ -71,6 +71,7 @@ const Quotations = {
                   <td>${status}</td>
                   <td style="font-size:12px;white-space:nowrap">${fmtDate(r.expires_at)}</td>
                   <td style="white-space:nowrap">
+                    ${answered ? `<button class="btn btn-outline btn-sm" onclick="PriceRequest.view(${r.id})" title="Ver cotação">👁 Ver</button>` : ''}
                     <button class="btn btn-outline btn-sm" data-url="${escHtml(url)}"
                       onclick="PriceRequest.copyLink(this.dataset.url)" title="Copiar link">🔗 Link</button>
                     <button class="btn btn-outline btn-sm" style="color:var(--danger);border-color:var(--danger)"
@@ -575,6 +576,51 @@ const PriceRequest = {
           </div>
         </div>
       </div>`;
+  },
+
+  async view(id) {
+    try {
+      const d = await API.get(`/price-requests/${id}/detail`);
+      const fmt = v => v > 0 ? fmtMoney(v) : '—';
+      const fmtDate2 = s => s ? new Date(s).toLocaleString('pt-BR', {day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '—';
+
+      const grouped = {};
+      (d.items||[]).forEach(i => { const c = i.category_name||'Geral'; if(!grouped[c]) grouped[c]=[]; grouped[c].push(i); });
+
+      const rows = Object.entries(grouped).map(([cat, items]) => `
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--gold);padding:10px 0 5px;border-bottom:1px solid var(--border);margin-bottom:6px">${escHtml(cat)}</div>
+        ${items.map(i => `
+          <div style="background:var(--card2);border:1px solid var(--border);border-radius:8px;padding:10px 14px;margin-bottom:6px">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap">
+              <div>
+                <div style="font-weight:600;font-size:14px">${escHtml(i.product_name)}</div>
+                <div style="font-size:12px;color:var(--gray);margin-top:2px">Qtd solicitada: ${i.quantity} ${escHtml(i.unit||'un')}</div>
+              </div>
+              <div style="text-align:right">
+                <div style="font-size:13px">Unit.: <strong style="color:var(--gold)">${fmt(i.unit_price)}</strong></div>
+                ${i.bulk_min_qty && i.bulk_price
+                  ? `<div style="font-size:12px;color:var(--gray);margin-top:2px">
+                       A partir de ${i.bulk_min_qty} ${escHtml(i.unit||'un')}: <strong style="color:var(--success)">${fmt(i.bulk_price)}</strong>
+                     </div>`
+                  : ''}
+              </div>
+            </div>
+          </div>`).join('')}
+      `).join('');
+
+      showModal(`Cotação — ${escHtml(d.company_name)}`, `
+        <div style="font-size:12px;color:var(--gray);margin-bottom:14px">
+          ${escHtml(d.churrascaria_name)} · Respondida em ${fmtDate2(d.last_filled_at)}
+        </div>
+        ${rows}
+        ${d.vendor_notes ? `
+          <div style="margin-top:14px;background:var(--card2);border:1px solid var(--border);border-radius:8px;padding:12px 14px">
+            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--gold);margin-bottom:6px">Observações do Vendedor</div>
+            <div style="font-size:13px;color:var(--white);line-height:1.6;white-space:pre-wrap">${escHtml(d.vendor_notes)}</div>
+          </div>` : ''}`,
+        `<button class="btn btn-primary" onclick="closeModal()">Fechar</button>`
+      );
+    } catch (err) { toast(err.message, 'error'); }
   },
 
   copyLink(url) {
