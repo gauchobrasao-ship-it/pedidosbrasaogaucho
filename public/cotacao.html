@@ -25,18 +25,16 @@
     .filled-notice{background:#43A04718;border:1px solid #43A04740;border-radius:8px;padding:10px 14px;font-size:13px;color:var(--success);margin-bottom:14px}
     .sec-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--gold);margin:18px 0 10px}
     .cat-bar{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--orange);padding:8px 0 5px;border-bottom:1px solid var(--border);margin-bottom:6px}
-    .prod-row{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-bottom:7px;display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center}
+    .prod-row{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-bottom:7px}
     .pn{font-weight:600;font-size:14px}
     .pm{font-size:11px;color:var(--gray);margin-top:2px}
     .pq{font-size:12px;color:var(--gray);margin-top:3px}
     .pg{display:flex;align-items:center;gap:5px}
     .pl{font-size:12px;color:var(--gray);white-space:nowrap}
-    .pi{background:#111;border:1px solid var(--border);border-radius:6px;color:var(--white);padding:9px 10px;font-size:16px;width:115px;text-align:right;outline:none;transition:border-color .15s;-moz-appearance:textfield}
-    .pi::-webkit-outer-spin-button,.pi::-webkit-inner-spin-button{-webkit-appearance:none}
+    .pi{background:#111;border:1px solid var(--border);border-radius:6px;color:var(--white);padding:9px 10px;font-size:16px;width:115px;text-align:right;outline:none;transition:border-color .15s}
     .pi:focus{border-color:var(--gold)}
     .pi.ok{border-color:var(--success)}
-    .pi-sm{background:#111;border:1px solid var(--border);border-radius:6px;color:var(--white);padding:7px 8px;font-size:14px;width:85px;text-align:right;outline:none;-moz-appearance:textfield}
-    .pi-sm::-webkit-outer-spin-button,.pi-sm::-webkit-inner-spin-button{-webkit-appearance:none}
+    .pi-sm{background:#111;border:1px solid var(--border);border-radius:6px;color:var(--white);padding:7px 8px;font-size:14px;width:85px;text-align:right;outline:none}
     .pi-sm:focus{border-color:var(--gold)}
     .bulk-row{display:flex;align-items:center;gap:5px;margin-top:8px;flex-wrap:wrap}
     .bulk-label{font-size:11px;color:var(--gray);white-space:nowrap}
@@ -53,8 +51,15 @@
     .si{font-size:52px}
     .st{font-size:20px;font-weight:700}
     .sm{color:var(--gray);font-size:14px;line-height:1.6}
+    /* Popup de confirmação */
+    .popup-overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:100;display:flex;align-items:center;justify-content:center;padding:20px}
+    .popup-box{background:var(--card);border:1px solid var(--gold);border-radius:14px;padding:28px 24px;max-width:360px;width:100%;text-align:center}
+    .popup-icon{font-size:42px;margin-bottom:12px}
+    .popup-title{font-size:17px;font-weight:800;color:var(--gold);margin-bottom:8px}
+    .popup-msg{font-size:13px;color:var(--gray);line-height:1.6;margin-bottom:22px}
+    .popup-close{display:block;width:100%;background:var(--gold);color:#000;font-weight:800;font-size:15px;padding:14px;border:none;border-radius:10px;cursor:pointer}
     @media(max-width:480px){
-      .prod-row{grid-template-columns:1fr;gap:10px}
+      .prod-row{gap:10px}
       .pg{justify-content:flex-end}
     }
   </style>
@@ -68,12 +73,49 @@
   </div>
 </div>
 <div id="root"></div>
+<div id="popup" style="display:none" class="popup-overlay">
+  <div class="popup-box">
+    <div class="popup-icon">👀</div>
+    <div class="popup-title">Confira os preços!</div>
+    <div class="popup-msg">
+      Revise os valores digitados antes de enviar.<br>
+      Lembre-se: <strong style="color:var(--white)">R$ 3,33</strong> deve ser digitado como <strong style="color:var(--white)">3,33</strong> — não como <strong style="color:var(--danger)">333</strong>.
+    </div>
+    <button class="popup-close" onclick="closePopupAndSend()">Conferi, enviar agora</button>
+  </div>
+</div>
 <script>
   const token = location.pathname.replace(/\/+$/, '').split('/').pop();
   let _data = null;
 
   function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
   function fmt(d){ return new Date(d).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}); }
+
+  // Formata campo como moeda enquanto digita (vírgula automática 2 casas)
+  function autoDecimal(el) {
+    const digits = el.value.replace(/\D/g, '');
+    if (!digits) { el.value = ''; el.classList.remove('ok'); return; }
+    const padded  = digits.padStart(3, '0');
+    const intPart = padded.slice(0, -2).replace(/^0+/, '') || '0';
+    const decPart = padded.slice(-2);
+    el.value = intPart + ',' + decPart;
+    el.classList.toggle('ok', intPart !== '0' || decPart !== '00');
+  }
+
+  // Lê valor numérico de campo formatado com vírgula
+  function readPrice(id) {
+    const v = document.getElementById(id)?.value || '';
+    return parseFloat(v.replace(',', '.')) || 0;
+  }
+
+  function setupPriceInputs() {
+    document.querySelectorAll('.pi').forEach(el => {
+      el.addEventListener('input', () => autoDecimal(el));
+    });
+    document.querySelectorAll('.pi-sm[data-price]').forEach(el => {
+      el.addEventListener('input', () => autoDecimal(el));
+    });
+  }
 
   async function load(){
     try{
@@ -95,8 +137,11 @@
 
     const rows = Object.entries(grouped).map(([cat,items]) => `
       <div class="cat-bar">${esc(cat)}</div>
-      ${items.map(i => `
-        <div class="prod-row" style="grid-template-columns:1fr;gap:10px">
+      ${items.map(i => {
+        const prevUnit = i.unit_price > 0 ? String(Math.round(i.unit_price * 100)) : '';
+        const prevBulk = i.bulk_price > 0 ? String(Math.round(i.bulk_price * 100)) : '';
+        return `
+        <div class="prod-row">
           <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap">
             <div>
               <div class="pn">${esc(i.product_name)}</div>
@@ -105,9 +150,8 @@
             </div>
             <div class="pg">
               <span class="pl">R$ unit.</span>
-              <input type="number" step="0.01" min="0" inputmode="decimal" class="pi" id="p-${i.product_id}"
-                placeholder="0,00" value="${i.unit_price > 0 ? Number(i.unit_price).toFixed(2) : ''}"
-                oninput="mark(this)">
+              <input type="text" inputmode="numeric" class="pi" id="p-${i.product_id}"
+                placeholder="0,00" value="${prevUnit ? formatFromCents(prevUnit) : ''}">
             </div>
           </div>
           <div class="bulk-row">
@@ -115,11 +159,12 @@
             <input type="number" step="1" min="1" inputmode="numeric" class="pi-sm" id="bq-${i.product_id}"
               placeholder="qtd" value="${i.bulk_min_qty > 0 ? i.bulk_min_qty : ''}">
             <span class="bulk-label">${esc(i.unit||'un')} por R$</span>
-            <input type="number" step="0.01" min="0" inputmode="decimal" class="pi-sm" id="bp-${i.product_id}"
-              placeholder="0,00" value="${i.bulk_price > 0 ? Number(i.bulk_price).toFixed(2) : ''}">
+            <input type="text" inputmode="numeric" class="pi-sm" data-price="1" id="bp-${i.product_id}"
+              placeholder="0,00" value="${prevBulk ? formatFromCents(prevBulk) : ''}">
             <span class="bulk-label">(opcional)</span>
           </div>
-        </div>`).join('')}
+        </div>`;
+      }).join('')}
     `).join('');
 
     document.getElementById('root').innerHTML = `
@@ -142,30 +187,45 @@
         <button class="btn-sub" id="btn-sub" onclick="submit()">Enviar Preços</button>
         <p class="hint">Preencha apenas os produtos disponíveis.<br>Campos em branco serão ignorados.</p>
       </div>`;
+
+    setupPriceInputs();
   }
 
-  function mark(el){ el.classList.toggle('ok', parseFloat(el.value)>0); }
+  function formatFromCents(digits) {
+    const padded  = digits.padStart(3, '0');
+    const intPart = padded.slice(0, -2).replace(/^0+/, '') || '0';
+    const decPart = padded.slice(-2);
+    return intPart + ',' + decPart;
+  }
 
-  async function submit(){
-    const btn = document.getElementById('btn-sub');
+  function submit(){
     const items = _data.items
       .map(i => ({
         product_id:   i.product_id,
-        unit_price:   parseFloat(document.getElementById('p-'+i.product_id)?.value||0),
+        unit_price:   readPrice('p-'+i.product_id),
         bulk_min_qty: parseFloat(document.getElementById('bq-'+i.product_id)?.value||0),
-        bulk_price:   parseFloat(document.getElementById('bp-'+i.product_id)?.value||0),
+        bulk_price:   readPrice('bp-'+i.product_id),
       }))
       .filter(i => i.unit_price > 0);
     if(!items.length){ alert('Preencha pelo menos um preço antes de enviar.'); return; }
-    const vendor_notes = document.getElementById('vendor-notes')?.value?.trim() || null;
+    // Guarda para envio após confirmação
+    window._submitItems = items;
+    window._submitNotes = document.getElementById('vendor-notes')?.value?.trim() || null;
+    document.getElementById('popup').style.display = 'flex';
+  }
+
+  async function closePopupAndSend(){
+    document.getElementById('popup').style.display = 'none';
+    const btn = document.getElementById('btn-sub');
     btn.disabled = true; btn.textContent = 'Enviando...';
     try{
       const res = await fetch('/api/price-requests/'+token+'/submit',{
-        method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({items, vendor_notes})
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({items: window._submitItems, vendor_notes: window._submitNotes})
       });
       const data = await res.json();
       if(!res.ok){ alert(data.error||'Erro ao enviar.'); btn.disabled=false; btn.textContent='Enviar Preços'; return; }
-      renderSuccess(items.length);
+      renderSuccess(window._submitItems.length);
     }catch(e){ alert('Erro de conexão.'); btn.disabled=false; btn.textContent='Enviar Preços'; }
   }
 
