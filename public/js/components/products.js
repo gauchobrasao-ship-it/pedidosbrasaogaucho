@@ -37,9 +37,17 @@ const Products = {
     return `<span style="font-size:12px;color:${color}">há ${days} dias</span>`;
   },
 
+  _searchTimer: null,
+
+  debouncedLoad(search, categoryId) {
+    clearTimeout(this._searchTimer);
+    this._searchTimer = setTimeout(() => this.load(search, categoryId), 280);
+  },
+
   async load(search = '', categoryId = '') {
     const el = document.getElementById('section-products');
-    el.innerHTML = '<div class="empty-state">Carregando...</div>';
+    const isFirstLoad = !el.querySelector('.card');
+    if (isFirstLoad) el.innerHTML = '<div class="empty-state">Carregando...</div>';
     try {
       const params = new URLSearchParams();
       if (search) params.set('search', search);
@@ -47,7 +55,7 @@ const Products = {
 
       const [products, cats] = await Promise.all([
         API.get('/products?' + params),
-        API.get('/categories'),
+        this._cache.data ? Promise.resolve(this._cache.data.cats) : API.get('/categories'),
       ]);
       this.categories = cats || [];
 
@@ -62,7 +70,7 @@ const Products = {
               <span class="search-icon">🔍</span>
               <input type="text" class="form-control" id="prod-search" placeholder="Buscar produto..."
                 value="${escHtml(search)}"
-                oninput="Products.load(this.value, document.getElementById('prod-filter-cat').value)">
+                oninput="Products.debouncedLoad(this.value, document.getElementById('prod-filter-cat').value)">
             </div>
             <select class="form-control" id="prod-filter-cat" style="max-width:220px"
               onchange="Products.load(document.getElementById('prod-search').value, this.value)">

@@ -7,45 +7,49 @@ const router = express.Router();
 router.get('/', authMiddleware, async (req, res) => {
   const { search, category_id } = req.query;
   const params = [];
-  let query = `
-    SELECT p.*, cat.name as category_name, cat.color as category_color,
-           COUNT(DISTINCT cp.company_id)::int as company_count,
-           MIN(cp.price) as min_price,
-           (
-             SELECT co.name FROM company_products cp2
-             JOIN companies co ON co.id = cp2.company_id
-             WHERE cp2.product_id = p.id AND cp2.active = 1 AND co.active = 1
-             ORDER BY cp2.price ASC LIMIT 1
-           ) as min_price_company,
-           (
-             SELECT cp2.updated_at FROM company_products cp2
-             JOIN companies co ON co.id = cp2.company_id
-             WHERE cp2.product_id = p.id AND cp2.active = 1 AND co.active = 1
-             ORDER BY cp2.price ASC LIMIT 1
-           ) as min_price_updated_at,
-           (
-             SELECT array_agg(name ORDER BY name)
-             FROM (
-               SELECT DISTINCT co.name
-               FROM company_products cp2
-               JOIN companies co ON co.id = cp2.company_id
-               WHERE cp2.product_id = p.id AND cp2.active = 1 AND co.active = 1
-             ) sub
-           ) as company_names
-    FROM products p
-    LEFT JOIN categories cat ON cat.id = p.category_id
-    LEFT JOIN company_products cp ON cp.product_id = p.id AND cp.active = 1
-    WHERE p.active = 1
-  `;
+  let productFilter = 'WHERE p.active = 1';
   if (search) {
     params.push(`%${search}%`);
-    query += ` AND (p.name ILIKE $${params.length} OR cat.name ILIKE $${params.length})`;
+    productFilter += ` AND (p.name ILIKE $${params.length} OR cat.name ILIKE $${params.length})`;
   }
   if (category_id) {
     params.push(category_id);
-    query += ` AND p.category_id = $${params.length}`;
+    productFilter += ` AND p.category_id = $${params.length}`;
   }
-  query += ' GROUP BY p.id, cat.name, cat.color ORDER BY p.name';
+
+  const query = `
+    WITH active_prices AS (
+      SELECT cp.product_id, cp.price, cp.updated_at, co.name as company_name
+      FROM company_products cp
+      JOIN companies co ON co.id = cp.company_id AND co.active = 1
+      WHERE cp.active = 1
+    ),
+    price_stats AS (
+      SELECT product_id,
+             COUNT(DISTINCT company_name)::int as company_count,
+             MIN(price) as min_price,
+             array_agg(DISTINCT company_name ORDER BY company_name) as company_names
+      FROM active_prices
+      GROUP BY product_id
+    ),
+    min_price_row AS (
+      SELECT DISTINCT ON (product_id)
+             product_id, company_name as min_price_company, updated_at as min_price_updated_at
+      FROM active_prices
+      ORDER BY product_id, price ASC
+    )
+    SELECT p.id, p.name, p.brand, p.unit, p.category_id,
+           cat.name as category_name, cat.color as category_color,
+           COALESCE(ps.company_count, 0) as company_count,
+           ps.min_price, ps.company_names,
+           mr.min_price_company, mr.min_price_updated_at
+    FROM products p
+    LEFT JOIN categories cat ON cat.id = p.category_id
+    LEFT JOIN price_stats ps ON ps.product_id = p.id
+    LEFT JOIN min_price_row mr ON mr.product_id = p.id
+    ${productFilter}
+    ORDER BY p.name
+  `;
   try {
     const { rows } = await pool.query(query, params);
     res.json(rows);
