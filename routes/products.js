@@ -22,7 +22,7 @@ router.get('/', authMiddleware, async (req, res) => {
       SELECT cp.product_id, cp.price, cp.bulk_price, cp.bulk_min_qty, cp.updated_at, co.name as company_name
       FROM company_products cp
       JOIN companies co ON co.id = cp.company_id AND co.active = 1
-      WHERE cp.active = 1
+      WHERE cp.active = 1 AND cp.price > 0
     ),
     price_stats AS (
       SELECT product_id,
