@@ -96,7 +96,7 @@ const Companies = {
   },
 
   async delete(id) {
-    if (!confirm2('Desativar este fornecedor?')) return;
+    if (!await confirm2('Desativar este fornecedor?', 'Desativar')) return;
     try {
       await API.delete(`/companies/${id}`);
       toast('Fornecedor desativado');
@@ -174,7 +174,7 @@ const Companies = {
   },
 
   async unlinkProduct(companyId, productId, companyName, churrId) {
-    if (!confirm2('Desvincular produto desta churrascaria?')) return;
+    if (!await confirm2('Desvincular produto desta churrascaria?', 'Desvincular')) return;
     try {
       await API.delete(`/companies/${companyId}/products/${productId}?churrascaria_id=${churrId}`);
       toast('Produto desvinculado');

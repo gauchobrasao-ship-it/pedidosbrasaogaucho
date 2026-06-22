@@ -55,7 +55,27 @@ function toast(msg, type = 'success') {
   document.getElementById('toast-container').appendChild(el);
   setTimeout(() => el.remove(), 3500);
 }
-function confirm2(msg) { return window.confirm(msg); }
+function confirm2(msg, confirmLabel = 'Confirmar', danger = true) {
+  return new Promise(resolve => {
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
+    overlay.innerHTML = `
+      <div style="background:var(--card2);border:1px solid var(--border);border-radius:14px;padding:28px 24px;max-width:340px;width:100%;text-align:center">
+        <div style="font-size:36px;margin-bottom:12px">${danger ? '⚠️' : '❓'}</div>
+        <div style="font-size:15px;font-weight:700;color:var(--white);margin-bottom:8px">Confirmação</div>
+        <div style="font-size:13px;color:var(--gray);line-height:1.6;margin-bottom:22px">${escHtml(msg)}</div>
+        <div style="display:flex;gap:10px">
+          <button id="_conf_cancel" style="flex:1;background:transparent;border:1px solid var(--border);color:var(--gray);font-weight:600;font-size:14px;padding:12px;border-radius:8px;cursor:pointer">Cancelar</button>
+          <button id="_conf_ok" style="flex:1;background:${danger ? 'var(--danger)' : 'var(--gold)'};color:${danger ? '#fff' : '#000'};font-weight:700;font-size:14px;padding:12px;border-radius:8px;cursor:pointer;border:none">${escHtml(confirmLabel)}</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+    const close = (result) => { overlay.remove(); resolve(result); };
+    overlay.querySelector('#_conf_ok').onclick = () => close(true);
+    overlay.querySelector('#_conf_cancel').onclick = () => close(false);
+    overlay.onclick = (e) => { if (e.target === overlay) close(false); };
+  });
+}
 
 function showModal(title, bodyHtml, footerHtml = '') {
   closeModal();

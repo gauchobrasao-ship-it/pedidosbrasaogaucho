@@ -62,6 +62,10 @@ router.post('/', authMiddleware, requirePermission('manage_companies'), async (r
   const { name, cnpj, phone, email, address, contact_name } = req.body;
   if (!name) return res.status(400).json({ error: 'Nome é obrigatório' });
   try {
+    const { rows: dup } = await pool.query(
+      'SELECT id FROM companies WHERE LOWER(name) = LOWER($1) AND active = 1', [name.trim()]
+    );
+    if (dup.length) return res.status(400).json({ error: 'Fornecedor já cadastrado com este nome' });
     const { rows } = await pool.query(
       'INSERT INTO companies (name, cnpj, phone, email, address, contact_name) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id',
       [name.trim(), cnpj || null, phone || null, email || null, address || null, contact_name || null]
@@ -76,7 +80,13 @@ router.post('/', authMiddleware, requirePermission('manage_companies'), async (r
 router.put('/:id', authMiddleware, requirePermission('manage_companies'), async (req, res) => {
   const { name, cnpj, phone, email, address, contact_name, active } = req.body;
   try {
-    if (name !== undefined) await pool.query('UPDATE companies SET name = $1 WHERE id = $2', [name, req.params.id]);
+    if (name !== undefined) {
+      const { rows: dup } = await pool.query(
+        'SELECT id FROM companies WHERE LOWER(name) = LOWER($1) AND active = 1 AND id <> $2', [name.trim(), req.params.id]
+      );
+      if (dup.length) return res.status(400).json({ error: 'Fornecedor já cadastrado com este nome' });
+      await pool.query('UPDATE companies SET name = $1 WHERE id = $2', [name, req.params.id]);
+    }
     if (cnpj !== undefined) await pool.query('UPDATE companies SET cnpj = $1 WHERE id = $2', [cnpj, req.params.id]);
     if (phone !== undefined) await pool.query('UPDATE companies SET phone = $1 WHERE id = $2', [phone, req.params.id]);
     if (email !== undefined) await pool.query('UPDATE companies SET email = $1 WHERE id = $2', [email, req.params.id]);

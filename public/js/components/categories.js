@@ -77,7 +77,7 @@ const Categories = {
   },
 
   async delete(id) {
-    if (!confirm2('Excluir esta categoria?')) return;
+    if (!await confirm2('Excluir esta categoria?', 'Excluir')) return;
     try {
       await API.delete(`/categories/${id}`);
       toast('Categoria excluída');

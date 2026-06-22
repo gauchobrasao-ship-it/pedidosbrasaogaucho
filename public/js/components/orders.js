@@ -91,7 +91,7 @@ const Orders = {
   },
 
   async delete(id) {
-    if (!confirm2(`Excluir pedido #${String(id).padStart(6,'0')}? Esta ação não pode ser desfeita.`)) return;
+    if (!await confirm2(`Excluir pedido #${String(id).padStart(6,'0')}? Esta ação não pode ser desfeita.`, 'Excluir')) return;
     try {
       await API.delete(`/orders/${id}`);
       toast('Pedido excluído');

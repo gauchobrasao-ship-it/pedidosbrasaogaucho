@@ -298,7 +298,7 @@ const Products = {
   },
 
   async delete(id) {
-    if (!confirm2('Desativar este produto?')) return;
+    if (!await confirm2('Desativar este produto?', 'Desativar')) return;
     try {
       await API.delete(`/products/${id}`);
       toast('Produto desativado');

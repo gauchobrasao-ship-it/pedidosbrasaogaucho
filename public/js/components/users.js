@@ -134,7 +134,7 @@ const Users = {
   },
 
   async delete(id) {
-    if (!confirm2('Desativar este usuário?')) return;
+    if (!await confirm2('Desativar este usuário?', 'Desativar')) return;
     try {
       await API.delete(`/users/${id}`);
       toast('Usuário desativado');

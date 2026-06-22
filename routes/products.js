@@ -53,6 +53,10 @@ router.post('/', authMiddleware, requirePermission('manage_products'), async (re
   const { name, category_id, unit, brand } = req.body;
   if (!name) return res.status(400).json({ error: 'Nome é obrigatório' });
   try {
+    const { rows: dup } = await pool.query(
+      'SELECT id FROM products WHERE LOWER(name) = LOWER($1) AND active = 1', [name.trim()]
+    );
+    if (dup.length) return res.status(400).json({ error: 'Produto já cadastrado com este nome' });
     const { rows } = await pool.query(
       'INSERT INTO products (name, category_id, unit, brand) VALUES ($1, $2, $3, $4) RETURNING id',
       [name.trim(), category_id || null, unit || 'un', brand || null]
@@ -67,7 +71,13 @@ router.post('/', authMiddleware, requirePermission('manage_products'), async (re
 router.put('/:id', authMiddleware, requirePermission('manage_products'), async (req, res) => {
   const { name, category_id, unit, brand } = req.body;
   try {
-    if (name !== undefined) await pool.query('UPDATE products SET name = $1 WHERE id = $2', [name, req.params.id]);
+    if (name !== undefined) {
+      const { rows: dup } = await pool.query(
+        'SELECT id FROM products WHERE LOWER(name) = LOWER($1) AND active = 1 AND id <> $2', [name.trim(), req.params.id]
+      );
+      if (dup.length) return res.status(400).json({ error: 'Produto já cadastrado com este nome' });
+      await pool.query('UPDATE products SET name = $1 WHERE id = $2', [name, req.params.id]);
+    }
     if (category_id !== undefined) await pool.query('UPDATE products SET category_id = $1 WHERE id = $2', [category_id, req.params.id]);
     if (unit !== undefined) await pool.query('UPDATE products SET unit = $1 WHERE id = $2', [unit, req.params.id]);
     if (brand !== undefined) await pool.query('UPDATE products SET brand = $1 WHERE id = $2', [brand || null, req.params.id]);
