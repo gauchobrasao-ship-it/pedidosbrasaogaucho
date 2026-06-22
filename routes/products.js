@@ -19,7 +19,7 @@ router.get('/', authMiddleware, async (req, res) => {
 
   const query = `
     WITH active_prices AS (
-      SELECT cp.product_id, cp.price, cp.updated_at, co.name as company_name
+      SELECT cp.product_id, cp.price, cp.bulk_price, cp.bulk_min_qty, cp.updated_at, co.name as company_name
       FROM company_products cp
       JOIN companies co ON co.id = cp.company_id AND co.active = 1
       WHERE cp.active = 1
@@ -34,7 +34,8 @@ router.get('/', authMiddleware, async (req, res) => {
     ),
     min_price_row AS (
       SELECT DISTINCT ON (product_id)
-             product_id, company_name as min_price_company, updated_at as min_price_updated_at
+             product_id, company_name as min_price_company, updated_at as min_price_updated_at,
+             bulk_price as min_bulk_price, bulk_min_qty as min_bulk_min_qty
       FROM active_prices
       ORDER BY product_id, price ASC
     )
@@ -42,7 +43,8 @@ router.get('/', authMiddleware, async (req, res) => {
            cat.name as category_name, cat.color as category_color,
            COALESCE(ps.company_count, 0) as company_count,
            ps.min_price, ps.company_names,
-           mr.min_price_company, mr.min_price_updated_at
+           mr.min_price_company, mr.min_price_updated_at,
+           mr.min_bulk_price, mr.min_bulk_min_qty
     FROM products p
     LEFT JOIN categories cat ON cat.id = p.category_id
     LEFT JOIN price_stats ps ON ps.product_id = p.id

@@ -102,7 +102,8 @@ const Products = {
                     + (extra > 0 ? `<div style="font-size:11px;color:var(--gray)">e mais ${extra}</div>` : '');
                 })()}</td>
                 <td>${p.min_price != null && p.company_count > 0
-                  ? `<div style="font-weight:600;color:var(--gold);font-size:13px">${fmtMoney(p.min_price)}</div>
+                  ? `<div style="font-weight:600;color:var(--gold);font-size:12px">un ${fmtMoney(p.min_price)}</div>
+                     ${p.min_bulk_price > 0 ? `<div style="font-weight:600;color:var(--orange);font-size:12px;margin-top:2px">vol ${fmtMoney(p.min_bulk_price)}</div>` : ''}
                      <div style="font-size:11px;color:var(--gray);margin-top:2px">${escHtml(p.min_price_company||'')}</div>`
                   : '<span class="text-gray" style="font-size:13px">—</span>'}</td>
                 <td>${Products.fmtDaysAgo(p.min_price_updated_at)}</td>

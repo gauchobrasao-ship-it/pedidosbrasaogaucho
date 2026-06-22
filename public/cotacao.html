@@ -85,7 +85,7 @@
     .m-cat-tag{display:inline-block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--orange);background:#E0782012;border:1px solid #E0782030;border-radius:4px;padding:3px 8px;margin-bottom:10px}
     .m-prod-name{font-size:18px;font-weight:800;line-height:1.3;margin-bottom:4px}
     .m-prod-brand{font-size:12px;color:var(--gray);margin-bottom:4px}
-    .m-prod-qty{font-size:12px;color:var(--gray);margin-bottom:16px}
+    .m-prod-qty{font-size:14px;font-weight:700;color:var(--orange);margin-bottom:16px}
 
     /* Price input mobile — grande e fácil de tocar */
     .m-price-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--gold);margin-bottom:8px}
@@ -99,11 +99,12 @@
     /* Bulk mobile */
     .m-bulk-sep{border-top:1px solid var(--border);padding-top:14px;margin-top:4px}
     .m-bulk-label-top{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--gray);margin-bottom:10px}
-    .m-bulk-row{display:flex;align-items:center;gap:8px}
+    .m-bulk-qty-row{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+    .m-bulk-price-row{display:flex;align-items:center;gap:8px}
     .m-bulk-text{font-size:12px;color:var(--gray);white-space:nowrap}
-    .m-pi-bulk-qty{background:#111;border:1px solid var(--border);border-radius:8px;color:var(--white);padding:12px 10px;font-size:18px;font-weight:700;text-align:right;outline:none;width:75px;-webkit-appearance:none}
+    .m-pi-bulk-qty{background:#111;border:1px solid var(--border);border-radius:8px;color:var(--white);padding:12px 10px;font-size:18px;font-weight:700;text-align:right;outline:none;width:90px;-webkit-appearance:none}
     .m-pi-bulk-qty:focus{border-color:var(--gold)}
-    .m-pi-bulk-price{background:#111;border:1px solid var(--border);border-radius:8px;color:var(--white);padding:12px 10px;font-size:18px;font-weight:700;text-align:right;outline:none;flex:1;-webkit-appearance:none}
+    .m-pi-bulk-price{background:#111;border:2px solid var(--border);border-radius:10px;color:var(--white);padding:16px 14px;font-size:28px;font-weight:700;text-align:right;outline:none;flex:1;-webkit-appearance:none}
     .m-pi-bulk-price:focus{border-color:var(--gold)}
     .m-pi-bulk-price.ok{border-color:var(--success)}
 
@@ -274,7 +275,7 @@
         ${i.category_name ? `<div class="m-cat-tag">${esc(i.category_name)}</div>` : ''}
         <div class="m-prod-name">${esc(i.product_name)}</div>
         ${i.brand ? `<div class="m-prod-brand">🏷 ${esc(i.brand)}</div>` : ''}
-        <div class="m-prod-qty">Quantidade pedida: <strong>${i.quantity} ${esc(i.unit||'un')}</strong></div>
+        <div class="m-prod-qty">📦 ${i.quantity} ${esc(i.unit||'un')} solicitados</div>
 
         <div class="m-price-label">Preço por ${esc(i.unit||'un')}</div>
         <div class="m-price-row">
@@ -286,12 +287,14 @@
 
         <div class="m-bulk-sep">
           <div class="m-bulk-label-top">Preço por volume <span style="color:var(--gray);font-weight:400;text-transform:none;letter-spacing:0">(opcional)</span></div>
-          <div class="m-bulk-row">
+          <div class="m-bulk-qty-row">
             <span class="m-bulk-text">A partir de</span>
-            <input type="number" step="1" min="1" inputmode="numeric" class="m-pi-bulk-qty"
-              id="bq-${i.product_id}" placeholder="qtd" value="${i.bulk_min_qty > 0 ? i.bulk_min_qty : ''}">
-            <span class="m-bulk-text">${esc(i.unit||'un')} →</span>
-            <span class="m-bulk-text">R$</span>
+            <input type="number" step="1" min="0" inputmode="numeric" class="m-pi-bulk-qty"
+              id="bq-${i.product_id}" placeholder="0" value="${i.bulk_min_qty > 0 ? i.bulk_min_qty : ''}">
+            <span class="m-bulk-text">${esc(i.unit||'un')}</span>
+          </div>
+          <div class="m-bulk-price-row">
+            <span class="m-currency">R$</span>
             <input type="text" inputmode="numeric" class="m-pi-bulk-price" data-price="1"
               id="bp-${i.product_id}" placeholder="0,00" value="${prevBulk ? formatFromCents(prevBulk) : ''}">
           </div>
