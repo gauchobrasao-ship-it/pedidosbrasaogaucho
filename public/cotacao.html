@@ -118,6 +118,15 @@
     .m-btn-sub:disabled{opacity:.45;cursor:not-allowed}
     .m-hint{font-size:12px;color:var(--gray);text-align:center;margin-top:10px;line-height:1.5}
     .m-filled-notice{background:#43A04718;border:1px solid #43A04740;border-radius:8px;padding:10px 14px;font-size:13px;color:var(--success);margin-bottom:12px}
+    /* Card bloqueado (já enviado) */
+    .m-card-locked{border-color:#43A04740;background:#1B221E}
+    .m-locked-badge{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:700;color:var(--success);margin-bottom:8px;text-transform:uppercase;letter-spacing:.6px}
+    .m-locked-prod-name{font-size:16px;font-weight:800;color:var(--white);opacity:.7;margin-bottom:2px}
+    .m-locked-brand{font-size:11px;color:var(--gray);margin-bottom:8px}
+    .m-locked-prices{display:flex;align-items:baseline;gap:16px;margin-top:6px;flex-wrap:wrap}
+    .m-locked-price-val{font-size:22px;font-weight:800;color:var(--gold)}
+    .m-locked-price-label{font-size:11px;color:var(--gray);margin-bottom:2px}
+    .m-locked-bulk-val{font-size:16px;font-weight:700;color:var(--orange)}
   </style>
 </head>
 <body>
@@ -261,45 +270,72 @@
   /* ══════════════════════════════════════════
      MOBILE
   ══════════════════════════════════════════ */
+  function renderLockedCard(i) {
+    const unitFmt  = 'R$ ' + parseFloat(i.unit_price).toFixed(2).replace('.', ',');
+    const bulkFmt  = i.bulk_price > 0 ? 'R$ ' + parseFloat(i.bulk_price).toFixed(2).replace('.', ',') : null;
+    return `
+    <div class="m-card m-card-locked">
+      <div class="m-locked-badge">✓ Enviado</div>
+      ${i.category_name ? `<div class="m-cat-tag">${esc(i.category_name)}</div>` : ''}
+      <div class="m-locked-prod-name">${esc(i.product_name)}</div>
+      ${i.brand ? `<div class="m-locked-brand">🏷 ${esc(i.brand)}</div>` : ''}
+      <div class="m-locked-prices">
+        <div>
+          <div class="m-locked-price-label">Unitário</div>
+          <div class="m-locked-price-val">${unitFmt}</div>
+        </div>
+        ${bulkFmt ? `<div>
+          <div class="m-locked-price-label">Volume</div>
+          <div class="m-locked-bulk-val">${bulkFmt}</div>
+        </div>` : ''}
+      </div>
+    </div>`;
+  }
+
+  function renderEditableCard(i) {
+    const prevUnit = i.unit_price > 0 ? String(Math.round(i.unit_price * 100)) : '';
+    const prevBulk = i.bulk_price > 0 ? String(Math.round(i.bulk_price * 100)) : '';
+    return `
+    <div class="m-card">
+      ${i.category_name ? `<div class="m-cat-tag">${esc(i.category_name)}</div>` : ''}
+      <div class="m-prod-name">${esc(i.product_name)}</div>
+      ${i.brand ? `<div class="m-prod-brand">🏷 ${esc(i.brand)}</div>` : ''}
+      <div class="m-prod-qty">📦 ${i.quantity} ${esc(i.unit||'un')} solicitados</div>
+
+      <div class="m-price-label">Preço por ${esc(i.unit||'un')}</div>
+      <div class="m-price-row">
+        <span class="m-currency">R$</span>
+        <input type="text" inputmode="numeric" class="m-pi" id="p-${i.product_id}"
+          placeholder="0,00" value="${prevUnit ? formatFromCents(prevUnit) : ''}">
+      </div>
+      <div class="m-pi-hint">Digite somente números — a vírgula entra automática</div>
+
+      <div class="m-bulk-sep">
+        <div class="m-bulk-label-top">Preço por volume <span style="color:var(--gray);font-weight:400;text-transform:none;letter-spacing:0">(opcional)</span></div>
+        <div class="m-bulk-row">
+          <span class="m-bulk-text">A partir de</span>
+          <input type="number" step="1" min="0" inputmode="numeric" class="m-pi-bulk-qty"
+            id="bq-${i.product_id}" placeholder="0" value="${i.bulk_min_qty > 0 ? i.bulk_min_qty : ''}">
+          <span class="m-bulk-text">${esc(i.unit||'un')} R$</span>
+          <input type="text" inputmode="numeric" class="m-pi-bulk-price" data-price="1"
+            id="bp-${i.product_id}" placeholder="0,00" value="${prevBulk ? formatFromCents(prevBulk) : ''}">
+        </div>
+      </div>
+    </div>`;
+  }
+
   function renderMobile(d){
-    const filledNotice = d.last_filled_at
-      ? `<div class="m-filled-notice">✓ Preços já enviados em ${fmt(d.last_filled_at)}. Você pode atualizar abaixo.</div>`
-      : '';
+    const locked  = d.items.filter(i => i.unit_price > 0);
+    const pending = d.items.filter(i => !(i.unit_price > 0));
+    const total   = d.items.length;
+    const lockedCount = locked.length;
 
-    const cards = d.items.map(i => {
-      const prevUnit = i.unit_price > 0 ? String(Math.round(i.unit_price * 100)) : '';
-      const prevBulk = i.bulk_price > 0 ? String(Math.round(i.bulk_price * 100)) : '';
-      return `
-      <div class="m-card">
-        ${i.category_name ? `<div class="m-cat-tag">${esc(i.category_name)}</div>` : ''}
-        <div class="m-prod-name">${esc(i.product_name)}</div>
-        ${i.brand ? `<div class="m-prod-brand">🏷 ${esc(i.brand)}</div>` : ''}
-        <div class="m-prod-qty">📦 ${i.quantity} ${esc(i.unit||'un')} solicitados</div>
+    const cards = [
+      ...locked.map(renderLockedCard),
+      ...pending.map(renderEditableCard),
+    ].join('');
 
-        <div class="m-price-label">Preço por ${esc(i.unit||'un')}</div>
-        <div class="m-price-row">
-          <span class="m-currency">R$</span>
-          <input type="text" inputmode="numeric" class="m-pi" id="p-${i.product_id}"
-            placeholder="0,00" value="${prevUnit ? formatFromCents(prevUnit) : ''}">
-        </div>
-        <div class="m-pi-hint">Digite somente números — a vírgula entra automática</div>
-
-        <div class="m-bulk-sep">
-          <div class="m-bulk-label-top">Preço por volume <span style="color:var(--gray);font-weight:400;text-transform:none;letter-spacing:0">(opcional)</span></div>
-          <div class="m-bulk-row">
-            <span class="m-bulk-text">A partir de</span>
-            <input type="number" step="1" min="0" inputmode="numeric" class="m-pi-bulk-qty"
-              id="bq-${i.product_id}" placeholder="0" value="${i.bulk_min_qty > 0 ? i.bulk_min_qty : ''}">
-            <span class="m-bulk-text">${esc(i.unit||'un')} R$</span>
-            <input type="text" inputmode="numeric" class="m-pi-bulk-price" data-price="1"
-              id="bp-${i.product_id}" placeholder="0,00" value="${prevBulk ? formatFromCents(prevBulk) : ''}">
-          </div>
-        </div>
-      </div>`;
-    }).join('');
-
-    // Contador de preenchidos
-    const total = d.items.length;
+    const allDone = pending.length === 0;
 
     document.getElementById('root').innerHTML = `
       <div class="mobile-wrap" style="display:block">
@@ -310,36 +346,43 @@
           <div class="m-info-row"><span class="m-il">Válido até</span><span class="m-iv">${fmt(d.expires_at)}</span></div>
         </div>
 
-        ${filledNotice}
-
         <div class="m-progress-wrap">
           <div class="m-progress-label">
-            <span>Produtos</span>
-            <span><span id="m-filled-count">0</span> de ${total} preenchidos</span>
+            <span>${lockedCount > 0 ? `${lockedCount} enviado${lockedCount>1?'s':''}` : 'Produtos'}</span>
+            <span><span id="m-filled-count">${lockedCount}</span> de ${total} concluídos</span>
           </div>
-          <div class="m-progress-bar"><div class="m-progress-fill" id="m-progress-fill" style="width:0%"></div></div>
+          <div class="m-progress-bar"><div class="m-progress-fill" id="m-progress-fill" style="width:${lockedCount/total*100}%"></div></div>
         </div>
 
         ${cards}
 
+        ${!allDone ? `
         <div class="m-notes">
           <div class="m-notes-title">Ofertas e Observações</div>
           <textarea class="m-notes-ta" id="vendor-notes"
             placeholder="Ofereça produtos não listados, condições especiais, prazos de entrega..."></textarea>
         </div>
-
         <button class="m-btn-sub" id="btn-sub" onclick="submitForm()">Enviar Preços</button>
-        <p class="m-hint">Preencha apenas os produtos disponíveis.<br>Campos em branco serão ignorados.</p>
+        <p class="m-hint">Preencha apenas os produtos disponíveis.<br>Campos em branco serão ignorados.<br>Você pode enviar em partes e continuar depois.</p>
+        ` : `
+        <div style="text-align:center;padding:24px 16px">
+          <div style="font-size:40px;margin-bottom:12px">✅</div>
+          <div style="font-size:17px;font-weight:800;color:var(--success);margin-bottom:6px">Cotação completa!</div>
+          <div style="font-size:13px;color:var(--gray);line-height:1.6">Todos os ${total} produtos foram enviados.<br>Obrigado!</div>
+        </div>
+        `}
       </div>`;
 
-    setupPriceInputs('.m-pi', '.m-pi-bulk-price[data-price]');
-    setupProgressTracker(total);
+    if (!allDone) {
+      setupPriceInputs('.m-pi', '.m-pi-bulk-price[data-price]');
+      setupProgressTracker(total, lockedCount);
+    }
   }
 
-  function setupProgressTracker(total) {
+  function setupProgressTracker(total, alreadyLocked = 0) {
     const inputs = document.querySelectorAll('.m-pi');
     function update() {
-      let filled = 0;
+      let filled = alreadyLocked;
       inputs.forEach(el => { if (el.classList.contains('ok')) filled++; });
       document.getElementById('m-filled-count').textContent = filled;
       document.getElementById('m-progress-fill').style.width = (filled / total * 100) + '%';
@@ -351,7 +394,9 @@
      SUBMIT
   ══════════════════════════════════════════ */
   function submitForm(){
+    // Coleta apenas itens pendentes (sem preço bloqueado)
     const items = _data.items
+      .filter(i => !(i.unit_price > 0))
       .map(i => ({
         product_id:   i.product_id,
         unit_price:   readPrice('p-'+i.product_id),
@@ -362,22 +407,54 @@
     if(!items.length){ alert('Preencha pelo menos um preço antes de enviar.'); return; }
     window._submitItems = items;
     window._submitNotes = document.getElementById('vendor-notes')?.value?.trim() || null;
+
+    const pending  = _data.items.filter(i => !(i.unit_price > 0)).length;
+    const sending  = items.length;
+    const leftover = pending - sending;
+    // Atualizar mensagem do popup conforme sobrar itens
+    const popupMsg = document.querySelector('.popup-msg');
+    if (popupMsg) {
+      popupMsg.innerHTML = leftover > 0
+        ? `Revise os valores digitados antes de enviar.<br>
+           Lembre-se: <strong style="color:var(--white)">R$ 3,33</strong> deve ser digitado como <strong style="color:var(--white)">3,33</strong>.<br><br>
+           Após enviar, esses <strong style="color:var(--white)">${sending} produto(s)</strong> serão bloqueados.
+           Você poderá preencher os <strong style="color:var(--gold)">${leftover} restantes</strong> depois.`
+        : `Revise os valores digitados antes de enviar.<br>
+           Lembre-se: <strong style="color:var(--white)">R$ 3,33</strong> deve ser digitado como <strong style="color:var(--white)">3,33</strong> — não como <strong style="color:var(--danger)">333</strong>.`;
+    }
     document.getElementById('popup').style.display = 'flex';
   }
 
   async function closePopupAndSend(){
     document.getElementById('popup').style.display = 'none';
     const btn = document.getElementById('btn-sub');
-    btn.disabled = true; btn.textContent = 'Enviando...';
+    if(btn){ btn.disabled = true; btn.textContent = 'Enviando...'; }
     try{
       const res = await fetch('/api/price-requests/'+token+'/submit',{
         method:'POST', headers:{'Content-Type':'application/json'},
         body:JSON.stringify({items: window._submitItems, vendor_notes: window._submitNotes})
       });
       const data = await res.json();
-      if(!res.ok){ alert(data.error||'Erro ao enviar.'); btn.disabled=false; btn.textContent='Enviar Preços'; return; }
-      renderSuccess(window._submitItems.length);
-    }catch(e){ alert('Erro de conexão.'); btn.disabled=false; btn.textContent='Enviar Preços'; }
+      if(!res.ok){ alert(data.error||'Erro ao enviar.'); if(btn){ btn.disabled=false; btn.textContent='Enviar Preços'; } return; }
+
+      // Bloquear itens recém-enviados em _data
+      window._submitItems.forEach(sent => {
+        const item = _data.items.find(i => i.product_id === sent.product_id);
+        if(item){
+          item.unit_price  = sent.unit_price;
+          item.bulk_price  = sent.bulk_price;
+          item.bulk_min_qty = sent.bulk_min_qty;
+        }
+      });
+
+      const stillPending = _data.items.filter(i => !(i.unit_price > 0));
+      if(stillPending.length > 0){
+        // Envio parcial — re-renderiza com itens bloqueados + pendentes
+        IS_MOBILE ? renderMobile(_data) : renderDesktop(_data);
+      } else {
+        renderSuccess(_data.items.length);
+      }
+    }catch(e){ alert('Erro de conexão.'); if(btn){ btn.disabled=false; btn.textContent='Enviar Preços'; } }
   }
 
   function renderSuccess(n){
