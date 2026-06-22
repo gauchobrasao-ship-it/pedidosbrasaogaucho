@@ -28,6 +28,15 @@ const Products = {
 
   invalidateCache() { this._cache.ts = 0; },
 
+  fmtDaysAgo(dateStr) {
+    if (!dateStr) return '<span class="text-gray" style="font-size:12px">—</span>';
+    const days = Math.floor((Date.now() - new Date(dateStr)) / 86400000);
+    if (days === 0) return '<span style="font-size:12px;color:var(--success)">hoje</span>';
+    if (days === 1) return '<span style="font-size:12px;color:var(--success)">há 1 dia</span>';
+    const color = days <= 7 ? 'var(--success)' : days <= 30 ? 'var(--gold)' : 'var(--danger)';
+    return `<span style="font-size:12px;color:${color}">há ${days} dias</span>`;
+  },
+
   async load(search = '', categoryId = '') {
     const el = document.getElementById('section-products');
     el.innerHTML = '<div class="empty-state">Carregando...</div>';
@@ -66,7 +75,7 @@ const Products = {
           ${!products || products.length === 0
             ? '<div class="empty-state"><div class="empty-icon">📦</div><p>Nenhum produto encontrado</p></div>'
             : `<div class="table-wrap"><table>
-              <thead><tr><th>Produto</th><th>Categoria</th><th>Unidade</th><th>Fornecedores</th><th>Menor Preço</th><th>Ações</th></tr></thead>
+              <thead><tr><th>Produto</th><th>Categoria</th><th>Unidade</th><th>Fornecedores</th><th>Menor Preço</th><th>Atualização</th><th>Ações</th></tr></thead>
               <tbody>${products.map(p => `<tr>
                 <td>
                   <strong>${escHtml(p.name)}</strong>
@@ -88,6 +97,7 @@ const Products = {
                   ? `<div style="font-weight:600;color:var(--gold);font-size:13px">${fmtMoney(p.min_price)}</div>
                      <div style="font-size:11px;color:var(--gray);margin-top:2px">${escHtml(p.min_price_company||'')}</div>`
                   : '<span class="text-gray" style="font-size:13px">—</span>'}</td>
+                <td>${Products.fmtDaysAgo(p.min_price_updated_at)}</td>
                 <td>
                   ${App.canDo('manage_products') ? `
                   <div class="flex flex-gap">
