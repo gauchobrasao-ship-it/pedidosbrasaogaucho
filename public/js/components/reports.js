@@ -2,6 +2,10 @@
 //  REPORTS
 // ════════════════════════════════════════
 const Reports = {
+  _priceChart: null,
+  _allProducts: [],
+  _phSearchTimer: null,
+
   async load() {
     const el = document.getElementById('section-reports');
     el.innerHTML = '<div class="empty-state">Carregando...</div>';
@@ -35,12 +39,153 @@ const Reports = {
             <button class="btn btn-outline btn-sm" onclick="Reports.clear()">Limpar</button>
           </div>
         </div>
-        <div id="rep-results"></div>`;
+        <div id="rep-results"></div>
+
+        <div class="card" style="margin-top:16px">
+          <div class="card-title mb-16">Histórico de Preços por Produto</div>
+          <div class="form-group" style="max-width:420px;position:relative">
+            <label class="form-label">Buscar produto</label>
+            <input type="text" class="form-control" id="ph-search"
+              placeholder="Digite o nome do produto..."
+              oninput="Reports.onPhSearch(this.value)"
+              autocomplete="off">
+            <div id="ph-dropdown" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--card2);border:1px solid var(--border);border-radius:8px;z-index:50;max-height:220px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.4)"></div>
+          </div>
+          <div id="ph-chart-wrap" style="display:none">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+              <div id="ph-product-label" style="font-size:14px;font-weight:700;color:var(--white)"></div>
+              <button class="btn btn-outline btn-sm" onclick="Reports.clearPriceHistory()">✕ Limpar</button>
+            </div>
+            <div style="position:relative;height:320px">
+              <canvas id="ph-chart"></canvas>
+            </div>
+            <div id="ph-legend" style="display:flex;flex-wrap:wrap;gap:12px;margin-top:12px"></div>
+          </div>
+          <div id="ph-empty" style="display:none;padding:20px;text-align:center;color:var(--gray);font-size:13px">
+            Nenhuma cotação encontrada para este produto.
+          </div>
+        </div>`;
 
       this.run();
+      this._loadProducts();
     } catch (err) {
       el.innerHTML = `<div class="empty-state text-danger">${err.message}</div>`;
     }
+  },
+
+  async _loadProducts() {
+    try {
+      this._allProducts = await API.get('/products');
+    } catch (_) {}
+  },
+
+  onPhSearch(val) {
+    clearTimeout(this._phSearchTimer);
+    const dd = document.getElementById('ph-dropdown');
+    if (!val.trim()) { dd.style.display = 'none'; return; }
+    this._phSearchTimer = setTimeout(() => {
+      const q = val.toLowerCase();
+      const matches = this._allProducts.filter(p => p.name.toLowerCase().includes(q)).slice(0, 12);
+      if (!matches.length) { dd.style.display = 'none'; return; }
+      dd.innerHTML = matches.map(p =>
+        `<div style="padding:10px 14px;cursor:pointer;font-size:13px;color:var(--white);border-bottom:1px solid var(--border)"
+          onmousedown="Reports.selectProduct(${p.id}, '${escHtml(p.name).replace(/'/g,"\\'")}')">
+          ${escHtml(p.name)}
+          ${p.category_name ? `<span style="font-size:11px;color:var(--gray);margin-left:6px">${escHtml(p.category_name)}</span>` : ''}
+        </div>`
+      ).join('');
+      dd.style.display = 'block';
+    }, 200);
+  },
+
+  async selectProduct(id, name) {
+    document.getElementById('ph-search').value = name;
+    document.getElementById('ph-dropdown').style.display = 'none';
+    document.getElementById('ph-product-label').textContent = name;
+    document.getElementById('ph-chart-wrap').style.display = 'none';
+    document.getElementById('ph-empty').style.display = 'none';
+
+    try {
+      const rows = await API.get(`/reports/price-history?product_id=${id}`);
+      if (!rows.length) { document.getElementById('ph-empty').style.display = 'block'; return; }
+      this._renderPriceChart(rows);
+    } catch (err) {
+      document.getElementById('ph-empty').style.display = 'block';
+    }
+  },
+
+  _renderPriceChart(rows) {
+    const COLORS = [
+      '#F5A623','#43A047','#2196F3','#E53935','#9C27B0',
+      '#00BCD4','#FF5722','#8BC34A','#3F51B5','#F06292',
+    ];
+    // Agrupar por empresa
+    const companies = [...new Set(rows.map(r => r.company_name))];
+    const allDates  = [...new Set(rows.map(r => r.date))].sort();
+
+    const datasets = companies.map((name, i) => {
+      const compRows = rows.filter(r => r.company_name === name);
+      const dateMap  = Object.fromEntries(compRows.map(r => [r.date, parseFloat(r.unit_price)]));
+      return {
+        label: name,
+        data: allDates.map(d => dateMap[d] ?? null),
+        borderColor: COLORS[i % COLORS.length],
+        backgroundColor: COLORS[i % COLORS.length] + '22',
+        borderWidth: 2,
+        pointRadius: 5,
+        pointHoverRadius: 7,
+        tension: 0.3,
+        spanGaps: false,
+      };
+    });
+
+    if (this._priceChart) { this._priceChart.destroy(); this._priceChart = null; }
+
+    const ctx = document.getElementById('ph-chart').getContext('2d');
+    this._priceChart = new Chart(ctx, {
+      type: 'line',
+      data: { labels: allDates.map(d => new Date(d + 'T12:00:00').toLocaleDateString('pt-BR')), datasets },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: ctx => ` ${ctx.dataset.label}: R$ ${ctx.parsed.y?.toFixed(2).replace('.',',') ?? '-'}`,
+            }
+          }
+        },
+        scales: {
+          x: { ticks: { color: '#9E9E9E', font: { size: 11 } }, grid: { color: '#ffffff10' } },
+          y: {
+            ticks: {
+              color: '#9E9E9E', font: { size: 11 },
+              callback: v => 'R$ ' + v.toFixed(2).replace('.', ','),
+            },
+            grid: { color: '#ffffff10' },
+          }
+        }
+      }
+    });
+
+    // Legenda manual
+    document.getElementById('ph-legend').innerHTML = companies.map((name, i) =>
+      `<div style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--white)">
+        <div style="width:14px;height:14px;border-radius:3px;background:${COLORS[i % COLORS.length]}"></div>
+        ${escHtml(name)}
+      </div>`
+    ).join('');
+
+    document.getElementById('ph-chart-wrap').style.display = 'block';
+  },
+
+  clearPriceHistory() {
+    document.getElementById('ph-search').value = '';
+    document.getElementById('ph-chart-wrap').style.display = 'none';
+    document.getElementById('ph-empty').style.display = 'none';
+    if (this._priceChart) { this._priceChart.destroy(); this._priceChart = null; }
   },
 
   clear() {

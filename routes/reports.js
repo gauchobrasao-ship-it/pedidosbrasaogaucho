@@ -146,4 +146,27 @@ router.get('/summary', authMiddleware, requirePermission('view_reports'), async 
   }
 });
 
+router.get('/price-history', authMiddleware, requirePermission('view_reports'), async (req, res) => {
+  const { product_id } = req.query;
+  if (!product_id) return res.status(400).json({ error: 'product_id obrigatório' });
+  try {
+    const { rows } = await pool.query(`
+      SELECT c.name as company_name,
+             pr.last_filled_at::date as date,
+             pri.unit_price
+      FROM price_request_items pri
+      JOIN price_requests pr ON pr.id = pri.request_id
+      JOIN companies c ON c.id = pr.company_id
+      WHERE pri.product_id = $1
+        AND pri.unit_price > 0
+        AND pr.last_filled_at IS NOT NULL
+      ORDER BY pr.last_filled_at ASC
+    `, [product_id]);
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
 module.exports = router;
