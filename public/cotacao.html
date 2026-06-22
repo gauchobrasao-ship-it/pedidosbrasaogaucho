@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Cotação – Brasão Gaúcho</title>
   <style>
     :root {
@@ -16,7 +16,22 @@
     .h-logo{font-size:26px}
     .h-title{font-size:15px;font-weight:800;letter-spacing:1px;color:var(--gold)}
     .h-sub{font-size:11px;color:var(--gray);margin-top:1px}
-    .wrap{max-width:680px;margin:0 auto;padding:20px 16px 60px}
+    .state{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:70vh;text-align:center;gap:14px;padding:32px}
+    .si{font-size:52px}
+    .st{font-size:20px;font-weight:700}
+    .sm{color:var(--gray);font-size:14px;line-height:1.6}
+    /* Popup de confirmação */
+    .popup-overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:100;display:flex;align-items:center;justify-content:center;padding:20px}
+    .popup-box{background:var(--card);border:1px solid var(--gold);border-radius:14px;padding:28px 24px;max-width:360px;width:100%;text-align:center}
+    .popup-icon{font-size:42px;margin-bottom:12px}
+    .popup-title{font-size:17px;font-weight:800;color:var(--gold);margin-bottom:8px}
+    .popup-msg{font-size:13px;color:var(--gray);line-height:1.6;margin-bottom:22px}
+    .popup-close{display:block;width:100%;background:var(--gold);color:#000;font-weight:800;font-size:15px;padding:14px;border:none;border-radius:10px;cursor:pointer}
+
+    /* ══════════════════════════════
+       DESKTOP LAYOUT
+    ══════════════════════════════ */
+    .desktop-wrap{max-width:680px;margin:0 auto;padding:20px 16px 60px}
     .info-box{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px 18px;margin-bottom:18px}
     .info-row{display:flex;justify-content:space-between;align-items:center;padding:4px 0;font-size:13px}
     .info-row+.info-row{border-top:1px solid var(--border)}
@@ -42,26 +57,67 @@
     .notes-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--gold);margin-bottom:10px}
     .notes-ta{width:100%;background:#111;border:1px solid var(--border);border-radius:6px;color:var(--white);padding:10px 12px;font-size:14px;font-family:inherit;resize:vertical;min-height:90px;outline:none;line-height:1.5}
     .notes-ta:focus{border-color:var(--gold)}
-    .notes-hint{font-size:11px;color:var(--gray);margin-top:6px;line-height:1.5}
     .btn-sub{display:block;width:100%;background:var(--gold);color:#000;font-weight:800;font-size:16px;padding:16px;border:none;border-radius:10px;cursor:pointer;margin-top:24px;letter-spacing:.5px;transition:opacity .15s}
     .btn-sub:hover{opacity:.9}
     .btn-sub:disabled{opacity:.45;cursor:not-allowed}
     .hint{font-size:12px;color:var(--gray);text-align:center;margin-top:10px;line-height:1.5}
-    .state{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:70vh;text-align:center;gap:14px;padding:32px}
-    .si{font-size:52px}
-    .st{font-size:20px;font-weight:700}
-    .sm{color:var(--gray);font-size:14px;line-height:1.6}
-    /* Popup de confirmação */
-    .popup-overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:100;display:flex;align-items:center;justify-content:center;padding:20px}
-    .popup-box{background:var(--card);border:1px solid var(--gold);border-radius:14px;padding:28px 24px;max-width:360px;width:100%;text-align:center}
-    .popup-icon{font-size:42px;margin-bottom:12px}
-    .popup-title{font-size:17px;font-weight:800;color:var(--gold);margin-bottom:8px}
-    .popup-msg{font-size:13px;color:var(--gray);line-height:1.6;margin-bottom:22px}
-    .popup-close{display:block;width:100%;background:var(--gold);color:#000;font-weight:800;font-size:15px;padding:14px;border:none;border-radius:10px;cursor:pointer}
-    @media(max-width:480px){
-      .prod-row{gap:10px}
-      .pg{justify-content:flex-end}
-    }
+
+    /* ══════════════════════════════
+       MOBILE LAYOUT
+    ══════════════════════════════ */
+    .mobile-wrap{display:none;padding:12px 12px 80px}
+
+    /* Info card mobile */
+    .m-info{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:14px}
+    .m-info-row{display:flex;justify-content:space-between;align-items:center;padding:5px 0;font-size:13px}
+    .m-info-row+.m-info-row{border-top:1px solid var(--border)}
+    .m-il{color:var(--gray);font-size:12px}
+    .m-iv{font-weight:700;font-size:13px;text-align:right}
+
+    /* Progress bar */
+    .m-progress-wrap{margin-bottom:14px}
+    .m-progress-label{font-size:11px;color:var(--gray);margin-bottom:6px;display:flex;justify-content:space-between}
+    .m-progress-bar{height:4px;background:var(--border);border-radius:2px;overflow:hidden}
+    .m-progress-fill{height:100%;background:var(--gold);border-radius:2px;transition:width .3s}
+
+    /* Product card mobile */
+    .m-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px 16px;margin-bottom:10px}
+    .m-cat-tag{display:inline-block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--orange);background:#E0782012;border:1px solid #E0782030;border-radius:4px;padding:3px 8px;margin-bottom:10px}
+    .m-prod-name{font-size:18px;font-weight:800;line-height:1.3;margin-bottom:4px}
+    .m-prod-brand{font-size:12px;color:var(--gray);margin-bottom:4px}
+    .m-prod-qty{font-size:12px;color:var(--gray);margin-bottom:16px}
+
+    /* Price input mobile — grande e fácil de tocar */
+    .m-price-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--gold);margin-bottom:8px}
+    .m-price-row{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+    .m-currency{font-size:22px;font-weight:800;color:var(--gray)}
+    .m-pi{flex:1;background:#111;border:2px solid var(--border);border-radius:10px;color:var(--white);padding:16px 14px;font-size:28px;font-weight:700;text-align:right;outline:none;transition:border-color .2s;width:100%;-webkit-appearance:none}
+    .m-pi:focus{border-color:var(--gold)}
+    .m-pi.ok{border-color:var(--success)}
+    .m-pi-hint{font-size:11px;color:var(--gray);text-align:right;margin-bottom:14px}
+
+    /* Bulk mobile */
+    .m-bulk-sep{border-top:1px solid var(--border);padding-top:14px;margin-top:4px}
+    .m-bulk-label-top{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--gray);margin-bottom:10px}
+    .m-bulk-row{display:flex;align-items:center;gap:8px}
+    .m-bulk-text{font-size:12px;color:var(--gray);white-space:nowrap}
+    .m-pi-bulk-qty{background:#111;border:1px solid var(--border);border-radius:8px;color:var(--white);padding:12px 10px;font-size:18px;font-weight:700;text-align:right;outline:none;width:75px;-webkit-appearance:none}
+    .m-pi-bulk-qty:focus{border-color:var(--gold)}
+    .m-pi-bulk-price{background:#111;border:1px solid var(--border);border-radius:8px;color:var(--white);padding:12px 10px;font-size:18px;font-weight:700;text-align:right;outline:none;flex:1;-webkit-appearance:none}
+    .m-pi-bulk-price:focus{border-color:var(--gold)}
+    .m-pi-bulk-price.ok{border-color:var(--success)}
+
+    /* Notes mobile */
+    .m-notes{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px;margin-top:10px}
+    .m-notes-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--gold);margin-bottom:10px}
+    .m-notes-ta{width:100%;background:#111;border:1px solid var(--border);border-radius:8px;color:var(--white);padding:14px;font-size:15px;font-family:inherit;resize:vertical;min-height:100px;outline:none;line-height:1.5}
+    .m-notes-ta:focus{border-color:var(--gold)}
+
+    /* Submit mobile */
+    .m-btn-sub{display:block;width:100%;background:var(--gold);color:#000;font-weight:800;font-size:18px;padding:18px;border:none;border-radius:12px;cursor:pointer;margin-top:16px;letter-spacing:.5px}
+    .m-btn-sub:disabled{opacity:.45;cursor:not-allowed}
+    .m-hint{font-size:12px;color:var(--gray);text-align:center;margin-top:10px;line-height:1.5}
+    .m-filled-notice{background:#43A04718;border:1px solid #43A04740;border-radius:8px;padding:10px 14px;font-size:13px;color:var(--success);margin-bottom:12px}
   </style>
 </head>
 <body>
@@ -88,10 +144,12 @@
   const token = location.pathname.replace(/\/+$/, '').split('/').pop();
   let _data = null;
 
+  // Detecta mobile: tela pequena OU dispositivo touch
+  const IS_MOBILE = window.innerWidth < 700 || /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
   function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
   function fmt(d){ return new Date(d).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}); }
 
-  // Formata campo como moeda enquanto digita (vírgula automática 2 casas)
   function autoDecimal(el) {
     const digits = el.value.replace(/\D/g, '');
     if (!digits) { el.value = ''; el.classList.remove('ok'); return; }
@@ -102,17 +160,23 @@
     el.classList.toggle('ok', intPart !== '0' || decPart !== '00');
   }
 
-  // Lê valor numérico de campo formatado com vírgula
+  function formatFromCents(digits) {
+    const padded  = digits.padStart(3, '0');
+    const intPart = padded.slice(0, -2).replace(/^0+/, '') || '0';
+    const decPart = padded.slice(-2);
+    return intPart + ',' + decPart;
+  }
+
   function readPrice(id) {
     const v = document.getElementById(id)?.value || '';
     return parseFloat(v.replace(',', '.')) || 0;
   }
 
-  function setupPriceInputs() {
-    document.querySelectorAll('.pi').forEach(el => {
+  function setupPriceInputs(unitClass, bulkClass) {
+    document.querySelectorAll(unitClass).forEach(el => {
       el.addEventListener('input', () => autoDecimal(el));
     });
-    document.querySelectorAll('.pi-sm[data-price]').forEach(el => {
+    document.querySelectorAll(bulkClass).forEach(el => {
       el.addEventListener('input', () => autoDecimal(el));
     });
   }
@@ -123,11 +187,14 @@
       const data = await res.json();
       if(!res.ok){ res.status===410 ? renderExpired(data.error) : renderError(data.error); return; }
       _data = data;
-      renderForm(data);
+      IS_MOBILE ? renderMobile(data) : renderDesktop(data);
     }catch(e){ renderError('Erro de conexão. Verifique sua internet e tente novamente.'); }
   }
 
-  function renderForm(d){
+  /* ══════════════════════════════════════════
+     DESKTOP
+  ══════════════════════════════════════════ */
+  function renderDesktop(d){
     const grouped = {};
     d.items.forEach(i => { const c=i.category_name||'Geral'; if(!grouped[c]) grouped[c]=[]; grouped[c].push(i); });
 
@@ -168,7 +235,7 @@
     `).join('');
 
     document.getElementById('root').innerHTML = `
-      <div class="wrap">
+      <div class="desktop-wrap">
         <div class="info-box">
           <div class="info-row"><span class="il">Fornecedor</span><span class="iv">${esc(d.company_name)}</span></div>
           <div class="info-row"><span class="il">Unidade</span><span class="iv">${esc(d.churrascaria_name)}</span></div>
@@ -182,23 +249,109 @@
           <div class="notes-title">Ofertas e Observações</div>
           <textarea class="notes-ta" id="vendor-notes"
             placeholder="Ofereça produtos não listados, condições especiais, prazos de entrega ou qualquer observação relevante..."></textarea>
-          <div class="notes-hint">Este campo é opcional. Use para sugerir novos produtos ou informar condições especiais.</div>
+          <div style="font-size:11px;color:var(--gray);margin-top:6px;line-height:1.5">Este campo é opcional. Use para sugerir novos produtos ou informar condições especiais.</div>
         </div>
-        <button class="btn-sub" id="btn-sub" onclick="submit()">Enviar Preços</button>
+        <button class="btn-sub" id="btn-sub" onclick="submitForm()">Enviar Preços</button>
         <p class="hint">Preencha apenas os produtos disponíveis.<br>Campos em branco serão ignorados.</p>
       </div>`;
 
-    setupPriceInputs();
+    setupPriceInputs('.pi', '.pi-sm[data-price]');
   }
 
-  function formatFromCents(digits) {
-    const padded  = digits.padStart(3, '0');
-    const intPart = padded.slice(0, -2).replace(/^0+/, '') || '0';
-    const decPart = padded.slice(-2);
-    return intPart + ',' + decPart;
+  /* ══════════════════════════════════════════
+     MOBILE
+  ══════════════════════════════════════════ */
+  function renderMobile(d){
+    const filledNotice = d.last_filled_at
+      ? `<div class="m-filled-notice">✓ Preços já enviados em ${fmt(d.last_filled_at)}. Você pode atualizar abaixo.</div>`
+      : '';
+
+    const cards = d.items.map(i => {
+      const prevUnit = i.unit_price > 0 ? String(Math.round(i.unit_price * 100)) : '';
+      const prevBulk = i.bulk_price > 0 ? String(Math.round(i.bulk_price * 100)) : '';
+      return `
+      <div class="m-card">
+        ${i.category_name ? `<div class="m-cat-tag">${esc(i.category_name)}</div>` : ''}
+        <div class="m-prod-name">${esc(i.product_name)}</div>
+        ${i.brand ? `<div class="m-prod-brand">🏷 ${esc(i.brand)}</div>` : ''}
+        <div class="m-prod-qty">Quantidade pedida: <strong>${i.quantity} ${esc(i.unit||'un')}</strong></div>
+
+        <div class="m-price-label">Preço por ${esc(i.unit||'un')}</div>
+        <div class="m-price-row">
+          <span class="m-currency">R$</span>
+          <input type="text" inputmode="numeric" class="m-pi" id="p-${i.product_id}"
+            placeholder="0,00" value="${prevUnit ? formatFromCents(prevUnit) : ''}">
+        </div>
+        <div class="m-pi-hint">Digite somente números — a vírgula entra automática</div>
+
+        <div class="m-bulk-sep">
+          <div class="m-bulk-label-top">Preço por volume <span style="color:var(--gray);font-weight:400;text-transform:none;letter-spacing:0">(opcional)</span></div>
+          <div class="m-bulk-row">
+            <span class="m-bulk-text">A partir de</span>
+            <input type="number" step="1" min="1" inputmode="numeric" class="m-pi-bulk-qty"
+              id="bq-${i.product_id}" placeholder="qtd" value="${i.bulk_min_qty > 0 ? i.bulk_min_qty : ''}">
+            <span class="m-bulk-text">${esc(i.unit||'un')} →</span>
+            <span class="m-bulk-text">R$</span>
+            <input type="text" inputmode="numeric" class="m-pi-bulk-price" data-price="1"
+              id="bp-${i.product_id}" placeholder="0,00" value="${prevBulk ? formatFromCents(prevBulk) : ''}">
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+
+    // Contador de preenchidos
+    const total = d.items.length;
+
+    document.getElementById('root').innerHTML = `
+      <div class="mobile-wrap" style="display:block">
+        <div class="m-info">
+          <div class="m-info-row"><span class="m-il">Fornecedor</span><span class="m-iv">${esc(d.company_name)}</span></div>
+          <div class="m-info-row"><span class="m-il">Unidade</span><span class="m-iv">${esc(d.churrascaria_name)}</span></div>
+          ${d.title ? `<div class="m-info-row"><span class="m-il">Referência</span><span class="m-iv">${esc(d.title)}</span></div>` : ''}
+          <div class="m-info-row"><span class="m-il">Válido até</span><span class="m-iv">${fmt(d.expires_at)}</span></div>
+        </div>
+
+        ${filledNotice}
+
+        <div class="m-progress-wrap">
+          <div class="m-progress-label">
+            <span>Produtos</span>
+            <span><span id="m-filled-count">0</span> de ${total} preenchidos</span>
+          </div>
+          <div class="m-progress-bar"><div class="m-progress-fill" id="m-progress-fill" style="width:0%"></div></div>
+        </div>
+
+        ${cards}
+
+        <div class="m-notes">
+          <div class="m-notes-title">Ofertas e Observações</div>
+          <textarea class="m-notes-ta" id="vendor-notes"
+            placeholder="Ofereça produtos não listados, condições especiais, prazos de entrega..."></textarea>
+        </div>
+
+        <button class="m-btn-sub" id="btn-sub" onclick="submitForm()">Enviar Preços</button>
+        <p class="m-hint">Preencha apenas os produtos disponíveis.<br>Campos em branco serão ignorados.</p>
+      </div>`;
+
+    setupPriceInputs('.m-pi', '.m-pi-bulk-price[data-price]');
+    setupProgressTracker(total);
   }
 
-  function submit(){
+  function setupProgressTracker(total) {
+    const inputs = document.querySelectorAll('.m-pi');
+    function update() {
+      let filled = 0;
+      inputs.forEach(el => { if (el.classList.contains('ok')) filled++; });
+      document.getElementById('m-filled-count').textContent = filled;
+      document.getElementById('m-progress-fill').style.width = (filled / total * 100) + '%';
+    }
+    inputs.forEach(el => el.addEventListener('input', update));
+  }
+
+  /* ══════════════════════════════════════════
+     SUBMIT
+  ══════════════════════════════════════════ */
+  function submitForm(){
     const items = _data.items
       .map(i => ({
         product_id:   i.product_id,
@@ -208,7 +361,6 @@
       }))
       .filter(i => i.unit_price > 0);
     if(!items.length){ alert('Preencha pelo menos um preço antes de enviar.'); return; }
-    // Guarda para envio após confirmação
     window._submitItems = items;
     window._submitNotes = document.getElementById('vendor-notes')?.value?.trim() || null;
     document.getElementById('popup').style.display = 'flex';

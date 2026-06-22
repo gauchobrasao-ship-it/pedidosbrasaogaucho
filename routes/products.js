@@ -39,7 +39,7 @@ router.get('/', authMiddleware, async (req, res) => {
     params.push(category_id);
     query += ` AND p.category_id = $${params.length}`;
   }
-  query += ' GROUP BY p.id, cat.name, cat.color ORDER BY cat.name, p.name';
+  query += ' GROUP BY p.id, cat.name, cat.color ORDER BY p.name';
   try {
     const { rows } = await pool.query(query, params);
     res.json(rows);
