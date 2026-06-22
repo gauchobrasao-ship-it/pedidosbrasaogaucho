@@ -8,6 +8,25 @@ const Products = {
   linkedCompanies: [],
   lastCategoryId: '',
   lastUnit: 'un',
+  _cache: { data: null, ts: 0 },
+  _CACHE_TTL: 60000,
+
+  async _loadFormData() {
+    const now = Date.now();
+    if (this._cache.data && (now - this._cache.ts) < this._CACHE_TTL) {
+      return this._cache.data;
+    }
+    const [cats, companies, churrs] = await Promise.all([
+      API.get('/categories'),
+      API.get('/companies'),
+      API.get('/reports/churrascarias'),
+    ]);
+    this._cache.data = { cats: cats || [], companies: companies || [], churrs: churrs || [] };
+    this._cache.ts = now;
+    return this._cache.data;
+  },
+
+  invalidateCache() { this._cache.ts = 0; },
 
   async load(search = '', categoryId = '') {
     const el = document.getElementById('section-products');
@@ -95,19 +114,20 @@ const Products = {
     let product = {};
     this.linkedCompanies = [];
 
-    const [cats, companies, churrs] = await Promise.all([
-      API.get('/categories'),
-      API.get('/companies'),
-      API.get('/reports/churrascarias'),
-    ]);
-    this.categories    = cats || [];
-    this.companies     = companies || [];
-    this.churrascarias = churrs || [];
+    const formDataPromise = this._loadFormData();
+    const productPromise  = id ? Promise.all([
+      API.get(`/products/${id}`),
+      API.get(`/products/${id}/companies`),
+    ]) : Promise.resolve(null);
 
-    if (id) {
-      const products = await API.get('/products');
-      product = (products || []).find(p => p.id === id) || {};
-      this.linkedCompanies = await API.get(`/products/${id}/companies`) || [];
+    const [formData, productData] = await Promise.all([formDataPromise, productPromise]);
+    this.categories    = formData.cats;
+    this.companies     = formData.companies;
+    this.churrascarias = formData.churrs;
+
+    if (id && productData) {
+      product = productData[0] || {};
+      this.linkedCompanies = productData[1] || [];
     }
 
     // Build map: { company_id: { churrascaria_id: price } }
@@ -216,19 +236,20 @@ const Products = {
   async _saveCompanyLinks(productId) {
     const checkboxes = document.querySelectorAll('.pf-company-cb');
     const prevSet    = new Set(this.linkedCompanies.map(l => `${l.company_id}-${l.churrascaria_id}`));
-    const promises   = [];
+    const links = [], unlinks = [];
     checkboxes.forEach(cb => {
       const companyId = Number(cb.dataset.companyId);
       const churrId   = Number(cb.dataset.churrId);
-      const key       = `${companyId}-${churrId}`;
       const price     = parseFloat(document.getElementById(`pf-price-${companyId}-${churrId}`)?.value || 0);
       if (cb.checked) {
-        promises.push(API.post(`/companies/${companyId}/products`, { product_id: productId, churrascaria_id: churrId, price }));
-      } else if (prevSet.has(key)) {
-        promises.push(API.delete(`/companies/${companyId}/products/${productId}?churrascaria_id=${churrId}`));
+        links.push({ company_id: companyId, churrascaria_id: churrId, price });
+      } else if (prevSet.has(`${companyId}-${churrId}`)) {
+        unlinks.push({ company_id: companyId, churrascaria_id: churrId });
       }
     });
-    await Promise.all(promises);
+    if (links.length || unlinks.length) {
+      await API.post(`/products/${productId}/companies/batch`, { links, unlinks });
+    }
   },
 
   toggleNewCatForm() {
@@ -242,6 +263,7 @@ const Products = {
     if (!name) { toast('Digite o nome da categoria', 'error'); return; }
     try {
       const result = await API.post('/categories', { name, color: '#E07820' });
+      this.invalidateCache();
       const cats = await API.get('/categories');
       this.categories = cats || [];
       document.getElementById('pf-cat').innerHTML = this.buildCatOptions(result.id);

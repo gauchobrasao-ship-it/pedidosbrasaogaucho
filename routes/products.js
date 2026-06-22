@@ -98,6 +98,23 @@ router.delete('/:id', authMiddleware, requirePermission('manage_products'), asyn
   }
 });
 
+router.get('/:id', authMiddleware, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT p.*, cat.name as category_name, cat.color as category_color
+       FROM products p
+       LEFT JOIN categories cat ON cat.id = p.category_id
+       WHERE p.id = $1 AND p.active = 1`,
+      [req.params.id]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Produto não encontrado' });
+    res.json(rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
 router.get('/:id/companies', authMiddleware, async (req, res) => {
   try {
     const { rows } = await pool.query(`
@@ -111,6 +128,33 @@ router.get('/:id/companies', authMiddleware, async (req, res) => {
       ORDER BY co.name, cp.churrascaria_id
     `, [req.params.id]);
     res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
+router.post('/:id/companies/batch', authMiddleware, requirePermission('manage_products'), async (req, res) => {
+  const productId = req.params.id;
+  const { links = [], unlinks = [] } = req.body;
+  try {
+    const ops = [];
+    for (const { company_id, churrascaria_id, price } of links) {
+      ops.push(pool.query(`
+        INSERT INTO company_products (churrascaria_id, company_id, product_id, price, active)
+        VALUES ($1, $2, $3, $4, 1)
+        ON CONFLICT (churrascaria_id, company_id, product_id)
+        DO UPDATE SET active=1, price=EXCLUDED.price, updated_at=NOW()
+      `, [churrascaria_id, company_id, productId, price || 0]));
+    }
+    for (const { company_id, churrascaria_id } of unlinks) {
+      ops.push(pool.query(
+        'UPDATE company_products SET active=0 WHERE churrascaria_id=$1 AND company_id=$2 AND product_id=$3',
+        [churrascaria_id, company_id, productId]
+      ));
+    }
+    await Promise.all(ops);
+    res.json({ message: 'Vínculos atualizados' });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Erro interno' });
