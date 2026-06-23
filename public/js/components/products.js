@@ -91,6 +91,9 @@ const Products = {
               ).join('')}
             </select>
           </div>
+          <div style="font-size:12px;color:var(--gray);padding:0 4px 10px">
+            <strong style="color:var(--white)">${(products||[]).length}</strong> ${(products||[]).length === 1 ? 'produto encontrado' : 'produtos encontrados'}
+          </div>
           ${!products || products.length === 0
             ? '<div class="empty-state"><div class="empty-icon">📦</div><p>Nenhum produto encontrado</p></div>'
             : `<div class="table-wrap"><table>

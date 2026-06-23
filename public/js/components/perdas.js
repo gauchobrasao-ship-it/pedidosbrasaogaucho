@@ -50,10 +50,12 @@ const Perdas = {
   },
 
   _renderTable(perdas) {
+    const n = (perdas||[]).length;
+    const counter = `<div style="font-size:12px;color:var(--gray);padding:0 4px 10px"><strong style="color:var(--white)">${n}</strong> ${n === 1 ? 'registro encontrado' : 'registros encontrados'}</div>`;
     if (!perdas.length) {
-      return '<div class="empty-state"><div class="empty-icon">📉</div><p>Nenhuma perda registrada</p></div>';
+      return counter + '<div class="empty-state"><div class="empty-icon">📉</div><p>Nenhuma perda registrada</p></div>';
     }
-    return `<div class="table-wrap"><table>
+    return counter + `<div class="table-wrap"><table>
       <thead><tr>
         <th>Data</th><th>Funcionário</th><th>Produto</th><th>Qtd</th><th>Motivo</th><th>Unidade</th><th>Registrado por</th><th></th>
       </tr></thead>

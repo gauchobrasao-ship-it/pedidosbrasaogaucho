@@ -20,6 +20,9 @@ const Companies = {
                 oninput="Companies.load(this.value)">
             </div>
           </div>
+          <div style="font-size:12px;color:var(--gray);padding:0 4px 10px">
+            <strong style="color:var(--white)">${(companies||[]).length}</strong> ${(companies||[]).length === 1 ? 'fornecedor encontrado' : 'fornecedores encontrados'}
+          </div>
           ${!companies || companies.length === 0
             ? '<div class="empty-state"><div class="empty-icon">🏢</div><p>Nenhum fornecedor encontrado</p></div>'
             : `<div class="table-wrap"><table>

@@ -15,6 +15,9 @@ const Categories = {
             <span class="card-title">Categorias</span>
             ${App.canDo('manage_categories') ? `<button class="btn btn-primary" onclick="Categories.openForm()">+ Nova Categoria</button>` : ''}
           </div>
+          <div style="font-size:12px;color:var(--gray);padding:8px 4px 10px">
+            <strong style="color:var(--white)">${(cats||[]).length}</strong> ${(cats||[]).length === 1 ? 'categoria' : 'categorias'}
+          </div>
           ${!cats || cats.length === 0
             ? '<div class="empty-state"><div class="empty-icon">🏷️</div><p>Nenhuma categoria</p></div>'
             : `<div class="table-wrap"><table>

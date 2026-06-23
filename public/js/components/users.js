@@ -13,6 +13,9 @@ const Users = {
             <span class="card-title">Usuários</span>
             <button class="btn btn-primary" onclick="Users.openForm()">+ Novo Usuário</button>
           </div>
+          <div style="font-size:12px;color:var(--gray);padding:8px 4px 10px">
+            <strong style="color:var(--white)">${(users||[]).length}</strong> ${(users||[]).length === 1 ? 'usuário' : 'usuários'}
+          </div>
           <div class="table-wrap"><table>
             <thead><tr><th>Nome</th><th>Email</th><th>Perfil</th><th>Status</th><th>Ações</th></tr></thead>
             <tbody>${(users||[]).map(u => `<tr>

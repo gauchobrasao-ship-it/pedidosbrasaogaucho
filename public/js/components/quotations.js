@@ -43,6 +43,9 @@ const Quotations = {
           <span class="card-title">Cotação Externa</span>
           <button class="btn btn-primary" onclick="PriceRequest.openNew()">+ Nova Cotação</button>
         </div>
+        <div style="font-size:12px;color:var(--gray);padding:8px 4px 10px">
+          <strong style="color:var(--white)">${(requests||[]).length}</strong> ${(requests||[]).length === 1 ? 'cotação encontrada' : 'cotações encontradas'}
+        </div>
         ${!requests?.length
           ? `<div class="empty-state">
                <div class="empty-icon">📨</div>
@@ -89,6 +92,9 @@ const Quotations = {
         <div class="card-header">
           <span class="card-title">Cotação Interna</span>
           <button class="btn btn-primary" onclick="Quotations.openNew()">+ Nova Cotação</button>
+        </div>
+        <div style="font-size:12px;color:var(--gray);padding:8px 4px 10px">
+          <strong style="color:var(--white)">${(quotations||[]).length}</strong> ${(quotations||[]).length === 1 ? 'cotação encontrada' : 'cotações encontradas'}
         </div>
         ${!quotations?.length
           ? '<div class="empty-state"><div class="empty-icon">📋</div><p>Nenhuma cotação ainda</p></div>'

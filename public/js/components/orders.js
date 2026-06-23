@@ -40,9 +40,11 @@ const Orders = {
   },
 
   renderTable(orders) {
+    const n = (orders||[]).length;
+    const counter = `<div style="font-size:12px;color:var(--gray);padding:0 4px 10px"><strong style="color:var(--white)">${n}</strong> ${n === 1 ? 'pedido encontrado' : 'pedidos encontrados'}</div>`;
     if (!orders || orders.length === 0)
-      return '<div class="empty-state"><div class="empty-icon">🛒</div><p>Nenhum pedido encontrado</p></div>';
-    return `<div class="table-wrap"><table>
+      return counter + '<div class="empty-state"><div class="empty-icon">🛒</div><p>Nenhum pedido encontrado</p></div>';
+    return counter + `<div class="table-wrap"><table>
       <thead><tr>
         <th>Nº</th><th>Churrascaria</th><th>Fornecedor</th><th>Responsável</th>
         <th>Total</th><th>Data</th><th>Ações</th>
