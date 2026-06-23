@@ -5,7 +5,7 @@ const { authMiddleware, requirePermission } = require('../middleware/auth');
 const router = express.Router();
 
 router.get('/', authMiddleware, async (req, res) => {
-  const { search, category_id } = req.query;
+  const { search, category_id, company_id } = req.query;
   const params = [];
   let productFilter = 'WHERE p.active = 1';
   if (search) {
@@ -15,6 +15,10 @@ router.get('/', authMiddleware, async (req, res) => {
   if (category_id) {
     params.push(category_id);
     productFilter += ` AND p.category_id = $${params.length}`;
+  }
+  if (company_id) {
+    params.push(company_id);
+    productFilter += ` AND EXISTS (SELECT 1 FROM company_products WHERE product_id = p.id AND company_id = $${params.length} AND active = 1)`;
   }
 
   const query = `

@@ -40,12 +40,12 @@ const Products = {
 
   _searchTimer: null,
 
-  debouncedLoad(search, categoryId) {
+  debouncedLoad(search, categoryId, companyId) {
     clearTimeout(this._searchTimer);
-    this._searchTimer = setTimeout(() => this.load(search, categoryId), 280);
+    this._searchTimer = setTimeout(() => this.load(search, categoryId, companyId), 280);
   },
 
-  async load(search = '', categoryId = '') {
+  async load(search = '', categoryId = '', companyId = '') {
     const el = document.getElementById('section-products');
     const isFirstLoad = !el.querySelector('.card');
     if (isFirstLoad) el.innerHTML = '<div class="empty-state">Carregando...</div>';
@@ -53,12 +53,15 @@ const Products = {
       const params = new URLSearchParams();
       if (search) params.set('search', search);
       if (categoryId) params.set('category_id', categoryId);
+      if (companyId) params.set('company_id', companyId);
 
-      const [products, cats] = await Promise.all([
+      const [products, cats, companies] = await Promise.all([
         API.get('/products?' + params),
         this._cache.data ? Promise.resolve(this._cache.data.cats) : API.get('/categories'),
+        this._cache.data ? Promise.resolve(this._cache.data.companies) : API.get('/companies'),
       ]);
       this.categories = cats || [];
+      this.companies = companies || [];
 
       el.innerHTML = `
         <div class="card">
@@ -71,13 +74,20 @@ const Products = {
               <span class="search-icon">🔍</span>
               <input type="text" class="form-control" id="prod-search" placeholder="Buscar produto..."
                 value="${escHtml(search)}"
-                oninput="Products.debouncedLoad(this.value, document.getElementById('prod-filter-cat').value)">
+                oninput="Products.debouncedLoad(this.value, document.getElementById('prod-filter-cat').value, document.getElementById('prod-filter-company').value)">
             </div>
-            <select class="form-control" id="prod-filter-cat" style="max-width:220px"
-              onchange="Products.load(document.getElementById('prod-search').value, this.value)">
+            <select class="form-control" id="prod-filter-cat" style="max-width:200px"
+              onchange="Products.load(document.getElementById('prod-search').value, this.value, document.getElementById('prod-filter-company').value)">
               <option value="">Todas as categorias</option>
               ${this.categories.map(c =>
                 `<option value="${c.id}" ${String(c.id) === String(categoryId) ? 'selected' : ''}>${escHtml(c.name)}</option>`
+              ).join('')}
+            </select>
+            <select class="form-control" id="prod-filter-company" style="max-width:200px"
+              onchange="Products.load(document.getElementById('prod-search').value, document.getElementById('prod-filter-cat').value, this.value)">
+              <option value="">Todos os fornecedores</option>
+              ${this.companies.map(c =>
+                `<option value="${c.id}" ${String(c.id) === String(companyId) ? 'selected' : ''}>${escHtml(c.name)}</option>`
               ).join('')}
             </select>
           </div>
@@ -318,7 +328,8 @@ const Products = {
       closeModal();
       toast(id ? 'Produto atualizado!' : 'Produto criado!');
       this.load(document.getElementById('prod-search')?.value || '',
-                document.getElementById('prod-filter-cat')?.value || '');
+                document.getElementById('prod-filter-cat')?.value || '',
+                document.getElementById('prod-filter-company')?.value || '');
     } catch (err) { toast(err.message, 'error'); }
   },
 
@@ -337,7 +348,8 @@ const Products = {
       this.lastUnit = data.unit;
       toast('Produto criado! Abrindo novo cadastro...');
       this.load(document.getElementById('prod-search')?.value || '',
-                document.getElementById('prod-filter-cat')?.value || '');
+                document.getElementById('prod-filter-cat')?.value || '',
+                document.getElementById('prod-filter-company')?.value || '');
       this.openForm(null, data.category_id, data.unit);
     } catch (err) { toast(err.message, 'error'); }
   },
@@ -348,7 +360,8 @@ const Products = {
       await API.delete(`/products/${id}`);
       toast('Produto desativado');
       this.load(document.getElementById('prod-search')?.value || '',
-                document.getElementById('prod-filter-cat')?.value || '');
+                document.getElementById('prod-filter-cat')?.value || '',
+                document.getElementById('prod-filter-company')?.value || '');
     } catch (err) { toast(err.message, 'error'); }
   }
 };
