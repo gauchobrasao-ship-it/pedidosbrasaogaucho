@@ -8,6 +8,7 @@ const Products = {
   linkedCompanies: [],
   lastCategoryId: '',
   lastUnit: 'un',
+  lastLinkedCompanies: [],
   _cache: { data: null, ts: 0 },
   _CACHE_TTL: 60000,
 
@@ -147,6 +148,8 @@ const Products = {
     if (id && productData) {
       product = productData[0] || {};
       this.linkedCompanies = productData[1] || [];
+    } else if (!id) {
+      this.linkedCompanies = this.lastLinkedCompanies;
     }
 
     // Build map: { company_id: { churrascaria_id: price } }
@@ -266,6 +269,7 @@ const Products = {
         unlinks.push({ company_id: companyId, churrascaria_id: churrId });
       }
     });
+    this.lastLinkedCompanies = links;
     if (links.length || unlinks.length) {
       await API.post(`/products/${productId}/companies/batch`, { links, unlinks });
     }
