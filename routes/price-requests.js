@@ -76,7 +76,7 @@ router.get('/:id/detail', authMiddleware, async (req, res) => {
     if (!request) return res.status(404).json({ error: 'Cotação não encontrada' });
 
     const { rows: items } = await pool.query(`
-      SELECT pri.product_id, pri.quantity, pri.unit_price, pri.bulk_min_qty, pri.bulk_price,
+      SELECT pri.product_id, pri.quantity, pri.unit_price, pri.bulk_min_qty, pri.bulk_price, pri.ruptura,
              p.name as product_name, p.unit, p.brand, cat.name as category_name
       FROM price_request_items pri
       JOIN products p ON p.id = pri.product_id
@@ -110,7 +110,7 @@ router.get('/:token', async (req, res) => {
     }
 
     const { rows: items } = await pool.query(`
-      SELECT pri.product_id, pri.quantity, pri.unit_price, pri.bulk_min_qty, pri.bulk_price,
+      SELECT pri.product_id, pri.quantity, pri.unit_price, pri.bulk_min_qty, pri.bulk_price, pri.ruptura,
              p.name as product_name, p.unit, p.brand, cat.name as category_name
       FROM price_request_items pri
       JOIN products p ON p.id = pri.product_id
@@ -136,10 +136,17 @@ router.post('/:token/submit', async (req, res) => {
     if (!request) return res.status(404).json({ error: 'Cotação não encontrada' });
     if (new Date(request.expires_at) < new Date()) return res.status(410).json({ error: 'Link expirado' });
 
+    const rupturaItems = items.filter(i => i.ruptura);
     const filled = items.filter(i => parseFloat(i.unit_price) > 0);
-    if (!filled.length) return res.status(400).json({ error: 'Informe pelo menos um preço' });
+    if (!filled.length && !rupturaItems.length) return res.status(400).json({ error: 'Informe pelo menos um preço ou marque ruptura' });
 
     await withTransaction(async (client) => {
+      for (const item of rupturaItems) {
+        await client.query(
+          `UPDATE price_request_items SET ruptura = true, unit_price = NULL, bulk_min_qty = NULL, bulk_price = NULL WHERE request_id = $1 AND product_id = $2`,
+          [request.id, item.product_id]
+        );
+      }
       for (const item of filled) {
         const price     = parseFloat(item.unit_price);
         const bulkQty   = parseFloat(item.bulk_min_qty) > 0 ? parseFloat(item.bulk_min_qty) : null;
@@ -152,7 +159,7 @@ router.post('/:token/submit', async (req, res) => {
         `, [request.churrascaria_id, request.company_id, item.product_id, price, bulkQty, bulkPrice]);
         await client.query(
           `UPDATE price_request_items
-           SET unit_price = $1, bulk_min_qty = $2, bulk_price = $3
+           SET unit_price = $1, bulk_min_qty = $2, bulk_price = $3, ruptura = false
            WHERE request_id = $4 AND product_id = $5`,
           [price, bulkQty, bulkPrice, request.id, item.product_id]
         );

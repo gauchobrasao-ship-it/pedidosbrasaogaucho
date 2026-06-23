@@ -41,12 +41,12 @@
     .sec-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--gold);margin:18px 0 10px}
     .cat-bar{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--orange);padding:8px 0 5px;border-bottom:1px solid var(--border);margin-bottom:6px}
     .prod-row{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-bottom:7px}
-    .pn{font-weight:600;font-size:14px}
-    .pm{font-size:11px;color:var(--gray);margin-top:2px}
+    .pn{font-weight:700;font-size:16px}
+    .pm{font-size:13px;color:var(--gray);margin-top:2px}
     .pq{font-size:12px;color:var(--gray);margin-top:3px}
     .pg{display:flex;align-items:center;gap:5px}
     .pl{font-size:12px;color:var(--gray);white-space:nowrap}
-    .pi{background:#111;border:1px solid var(--border);border-radius:6px;color:var(--white);padding:9px 10px;font-size:16px;width:115px;text-align:right;outline:none;transition:border-color .15s}
+    .pi{background:#111;border:1px solid var(--border);border-radius:6px;color:var(--white);padding:8px 8px;font-size:14px;width:98px;text-align:right;outline:none;transition:border-color .15s}
     .pi:focus{border-color:var(--gold)}
     .pi.ok{border-color:var(--success)}
     .pi-sm{background:#111;border:1px solid var(--border);border-radius:6px;color:var(--white);padding:7px 8px;font-size:14px;width:85px;text-align:right;outline:none}
@@ -83,15 +83,15 @@
     /* Product card mobile */
     .m-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px 16px;margin-bottom:10px}
     .m-cat-tag{display:inline-block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--orange);background:#E0782012;border:1px solid #E0782030;border-radius:4px;padding:3px 8px;margin-bottom:10px}
-    .m-prod-name{font-size:18px;font-weight:800;line-height:1.3;margin-bottom:4px}
-    .m-prod-brand{font-size:12px;color:var(--gray);margin-bottom:4px}
+    .m-prod-name{font-size:21px;font-weight:800;line-height:1.3;margin-bottom:4px}
+    .m-prod-brand{font-size:14px;color:var(--gray);margin-bottom:4px}
     .m-prod-qty{font-size:14px;font-weight:700;color:var(--orange);margin-bottom:16px}
 
     /* Price input mobile — grande e fácil de tocar */
     .m-price-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--gold);margin-bottom:8px}
     .m-price-row{display:flex;align-items:center;gap:8px;margin-bottom:6px}
     .m-currency{font-size:22px;font-weight:800;color:var(--gray)}
-    .m-pi{flex:1;background:#111;border:2px solid var(--border);border-radius:10px;color:var(--white);padding:16px 14px;font-size:28px;font-weight:700;text-align:right;outline:none;transition:border-color .2s;width:100%;-webkit-appearance:none}
+    .m-pi{flex:1;background:#111;border:2px solid var(--border);border-radius:10px;color:var(--white);padding:13px 12px;font-size:24px;font-weight:700;text-align:right;outline:none;transition:border-color .2s;width:100%;-webkit-appearance:none}
     .m-pi:focus{border-color:var(--gold)}
     .m-pi.ok{border-color:var(--success)}
     .m-pi-hint{font-size:11px;color:var(--gray);text-align:right;margin-bottom:14px}
@@ -118,6 +118,16 @@
     .m-btn-sub:disabled{opacity:.45;cursor:not-allowed}
     .m-hint{font-size:12px;color:var(--gray);text-align:center;margin-top:10px;line-height:1.5}
     .m-filled-notice{background:#43A04718;border:1px solid #43A04740;border-radius:8px;padding:10px 14px;font-size:13px;color:var(--success);margin-bottom:12px}
+    /* Botão ruptura */
+    .btn-ruptura{display:inline-flex;align-items:center;gap:5px;background:transparent;border:1px solid #E5393540;color:#E53935;font-size:12px;font-weight:700;padding:7px 12px;border-radius:8px;cursor:pointer;margin-top:12px;transition:background .15s,border-color .15s;letter-spacing:.3px}
+    .btn-ruptura:hover{background:#E5393514;border-color:#E53935}
+    .btn-ruptura.active{background:#E5393520;border-color:#E53935;color:#ff6b6b}
+    .m-btn-ruptura{display:flex;align-items:center;justify-content:center;gap:6px;background:transparent;border:1px solid #E5393540;color:#E53935;font-size:13px;font-weight:700;padding:12px;border-radius:10px;cursor:pointer;margin-top:14px;width:100%;transition:background .15s,border-color .15s}
+    .m-btn-ruptura:hover{background:#E5393514;border-color:#E53935}
+    .m-btn-ruptura.active{background:#E5393520;border-color:#E53935;color:#ff6b6b}
+    /* Card em ruptura */
+    .m-card-ruptura{border-color:#E5393540;background:#221B1B}
+    .m-ruptura-badge{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:700;color:#E53935;margin-bottom:8px;text-transform:uppercase;letter-spacing:.6px}
     /* Card bloqueado (já enviado) */
     .m-card-locked{border-color:#43A04740;background:#1B221E}
     .m-locked-badge{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:700;color:var(--success);margin-bottom:8px;text-transform:uppercase;letter-spacing:.6px}
@@ -181,6 +191,44 @@
     return parseFloat(v.replace(',', '.')) || 0;
   }
 
+  const _rupturaSet = new Set();
+
+  function toggleRupturaDesktop(productId) {
+    const btn = document.getElementById('rup-' + productId);
+    const unitInput = document.getElementById('p-' + productId);
+    const bqInput   = document.getElementById('bq-' + productId);
+    const bpInput   = document.getElementById('bp-' + productId);
+    if (_rupturaSet.has(productId)) {
+      _rupturaSet.delete(productId);
+      btn.classList.remove('active');
+      btn.textContent = '⚠ Ruptura';
+      [unitInput, bqInput, bpInput].forEach(el => { if(el) el.disabled = false; });
+    } else {
+      _rupturaSet.add(productId);
+      btn.classList.add('active');
+      btn.textContent = '✓ Ruptura marcada';
+      [unitInput, bqInput, bpInput].forEach(el => { if(el) { el.disabled = true; el.value = ''; el.classList.remove('ok'); } });
+    }
+  }
+
+  function toggleRupturaMobile(productId) {
+    const btn = document.getElementById('rup-' + productId);
+    const unitInput = document.getElementById('p-' + productId);
+    const bqInput   = document.getElementById('bq-' + productId);
+    const bpInput   = document.getElementById('bp-' + productId);
+    if (_rupturaSet.has(productId)) {
+      _rupturaSet.delete(productId);
+      btn.classList.remove('active');
+      btn.textContent = '⚠ Ruptura';
+      [unitInput, bqInput, bpInput].forEach(el => { if(el) el.disabled = false; });
+    } else {
+      _rupturaSet.add(productId);
+      btn.classList.add('active');
+      btn.textContent = '✓ Ruptura marcada';
+      [unitInput, bqInput, bpInput].forEach(el => { if(el) { el.disabled = true; el.value = ''; el.classList.remove('ok'); } });
+    }
+  }
+
   function setupPriceInputs(unitClass, bulkClass) {
     document.querySelectorAll(unitClass).forEach(el => {
       el.addEventListener('input', () => autoDecimal(el));
@@ -217,7 +265,7 @@
         const prevUnit = i.unit_price > 0 ? String(Math.round(i.unit_price * 100)) : '';
         const prevBulk = i.bulk_price > 0 ? String(Math.round(i.bulk_price * 100)) : '';
         return `
-        <div class="prod-row">
+        <div class="prod-row" id="row-${i.product_id}">
           <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap">
             <div>
               <div class="pn">${esc(i.product_name)}</div>
@@ -239,6 +287,7 @@
               placeholder="0,00" value="${prevBulk ? formatFromCents(prevBulk) : ''}">
             <span class="bulk-label">(opcional)</span>
           </div>
+          <button class="btn-ruptura" id="rup-${i.product_id}" onclick="toggleRupturaDesktop(${i.product_id})">⚠ Ruptura</button>
         </div>`;
       }).join('')}
     `).join('');
@@ -271,6 +320,16 @@
      MOBILE
   ══════════════════════════════════════════ */
   function renderLockedCard(i) {
+    if (i.ruptura) {
+      return `
+      <div class="m-card m-card-ruptura">
+        <div class="m-ruptura-badge">⚠ Ruptura</div>
+        ${i.category_name ? `<div class="m-cat-tag">${esc(i.category_name)}</div>` : ''}
+        <div class="m-locked-prod-name">${esc(i.product_name)}</div>
+        ${i.brand ? `<div class="m-locked-brand">🏷 ${esc(i.brand)}</div>` : ''}
+        <div style="font-size:12px;color:var(--gray);margin-top:6px">Produto indisponível informado</div>
+      </div>`;
+    }
     const unitFmt  = 'R$ ' + parseFloat(i.unit_price).toFixed(2).replace('.', ',');
     const bulkFmt  = i.bulk_price > 0 ? 'R$ ' + parseFloat(i.bulk_price).toFixed(2).replace('.', ',') : null;
     return `
@@ -321,12 +380,13 @@
             id="bp-${i.product_id}" placeholder="0,00" value="${prevBulk ? formatFromCents(prevBulk) : ''}">
         </div>
       </div>
+      <button class="m-btn-ruptura" id="rup-${i.product_id}" onclick="toggleRupturaMobile(${i.product_id})">⚠ Ruptura</button>
     </div>`;
   }
 
   function renderMobile(d){
-    const locked  = d.items.filter(i => i.unit_price > 0);
-    const pending = d.items.filter(i => !(i.unit_price > 0));
+    const locked  = d.items.filter(i => i.unit_price > 0 || i.ruptura);
+    const pending = d.items.filter(i => !(i.unit_price > 0) && !i.ruptura);
     const total   = d.items.length;
     const lockedCount = locked.length;
 
@@ -394,9 +454,13 @@
      SUBMIT
   ══════════════════════════════════════════ */
   function submitForm(){
-    // Coleta apenas itens pendentes (sem preço bloqueado)
-    const items = _data.items
-      .filter(i => !(i.unit_price > 0))
+    // Coleta apenas itens pendentes (sem preço bloqueado e sem ruptura já registrada)
+    const pendentes = _data.items.filter(i => !(i.unit_price > 0) && !i.ruptura);
+    const rupturaItems = pendentes
+      .filter(i => _rupturaSet.has(i.product_id))
+      .map(i => ({ product_id: i.product_id, ruptura: true }));
+    const items = pendentes
+      .filter(i => !_rupturaSet.has(i.product_id))
       .map(i => ({
         product_id:   i.product_id,
         unit_price:   readPrice('p-'+i.product_id),
@@ -404,12 +468,13 @@
         bulk_price:   readPrice('bp-'+i.product_id),
       }))
       .filter(i => i.unit_price > 0);
-    if(!items.length){ alert('Preencha pelo menos um preço antes de enviar.'); return; }
+    if(!items.length && !rupturaItems.length){ alert('Preencha pelo menos um preço ou marque Ruptura antes de enviar.'); return; }
     window._submitItems = items;
+    window._submitRuptura = rupturaItems;
     window._submitNotes = document.getElementById('vendor-notes')?.value?.trim() || null;
 
-    const pending  = _data.items.filter(i => !(i.unit_price > 0)).length;
-    const sending  = items.length;
+    const pending  = _data.items.filter(i => !(i.unit_price > 0) && !i.ruptura).length;
+    const sending  = items.length + rupturaItems.length;
     const leftover = pending - sending;
     // Atualizar mensagem do popup conforme sobrar itens
     const popupMsg = document.querySelector('.popup-msg');
@@ -432,7 +497,7 @@
     try{
       const res = await fetch('/api/price-requests/'+token+'/submit',{
         method:'POST', headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({items: window._submitItems, vendor_notes: window._submitNotes})
+        body:JSON.stringify({items: [...window._submitItems, ...(window._submitRuptura||[])], vendor_notes: window._submitNotes})
       });
       const data = await res.json();
       if(!res.ok){ alert(data.error||'Erro ao enviar.'); if(btn){ btn.disabled=false; btn.textContent='Enviar Preços'; } return; }
@@ -440,14 +505,15 @@
       // Bloquear itens recém-enviados em _data
       window._submitItems.forEach(sent => {
         const item = _data.items.find(i => i.product_id === sent.product_id);
-        if(item){
-          item.unit_price  = sent.unit_price;
-          item.bulk_price  = sent.bulk_price;
-          item.bulk_min_qty = sent.bulk_min_qty;
-        }
+        if(item){ item.unit_price = sent.unit_price; item.bulk_price = sent.bulk_price; item.bulk_min_qty = sent.bulk_min_qty; item.ruptura = false; }
       });
+      (window._submitRuptura||[]).forEach(sent => {
+        const item = _data.items.find(i => i.product_id === sent.product_id);
+        if(item){ item.ruptura = true; item.unit_price = null; }
+      });
+      _rupturaSet.clear();
 
-      const stillPending = _data.items.filter(i => !(i.unit_price > 0));
+      const stillPending = _data.items.filter(i => !(i.unit_price > 0) && !i.ruptura);
       if(stillPending.length > 0){
         // Envio parcial — re-renderiza com itens bloqueados + pendentes
         IS_MOBILE ? renderMobile(_data) : renderDesktop(_data);
