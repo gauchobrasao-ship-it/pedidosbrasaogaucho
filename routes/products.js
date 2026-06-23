@@ -22,35 +22,40 @@ router.get('/', authMiddleware, async (req, res) => {
   }
 
   const query = `
-    WITH active_prices AS (
-      SELECT cp.product_id, cp.price, cp.bulk_price, cp.bulk_min_qty, cp.updated_at, co.name as company_name
+    WITH link_stats AS (
+      SELECT cp.product_id,
+             COUNT(DISTINCT cp.company_id)::int as company_count,
+             array_agg(DISTINCT co.name ORDER BY co.name) as company_names
+      FROM company_products cp
+      JOIN companies co ON co.id = cp.company_id AND co.active = 1
+      WHERE cp.active = 1
+      GROUP BY cp.product_id
+    ),
+    price_stats AS (
+      SELECT cp.product_id, MIN(cp.price) as min_price
       FROM company_products cp
       JOIN companies co ON co.id = cp.company_id AND co.active = 1
       WHERE cp.active = 1 AND cp.price > 0
-    ),
-    price_stats AS (
-      SELECT product_id,
-             COUNT(DISTINCT company_name)::int as company_count,
-             MIN(price) as min_price,
-             array_agg(DISTINCT company_name ORDER BY company_name) as company_names
-      FROM active_prices
-      GROUP BY product_id
+      GROUP BY cp.product_id
     ),
     min_price_row AS (
-      SELECT DISTINCT ON (product_id)
-             product_id, company_name as min_price_company, updated_at as min_price_updated_at,
-             bulk_price as min_bulk_price, bulk_min_qty as min_bulk_min_qty
-      FROM active_prices
-      ORDER BY product_id, price ASC
+      SELECT DISTINCT ON (cp.product_id)
+             cp.product_id, co.name as min_price_company, cp.updated_at as min_price_updated_at,
+             cp.bulk_price as min_bulk_price, cp.bulk_min_qty as min_bulk_min_qty
+      FROM company_products cp
+      JOIN companies co ON co.id = cp.company_id AND co.active = 1
+      WHERE cp.active = 1 AND cp.price > 0
+      ORDER BY cp.product_id, cp.price ASC
     )
     SELECT p.id, p.name, p.brand, p.unit, p.category_id,
            cat.name as category_name, cat.color as category_color,
-           COALESCE(ps.company_count, 0) as company_count,
-           ps.min_price, ps.company_names,
+           COALESCE(ls.company_count, 0) as company_count,
+           ps.min_price, ls.company_names,
            mr.min_price_company, mr.min_price_updated_at,
            mr.min_bulk_price, mr.min_bulk_min_qty
     FROM products p
     LEFT JOIN categories cat ON cat.id = p.category_id
+    LEFT JOIN link_stats ls ON ls.product_id = p.id
     LEFT JOIN price_stats ps ON ps.product_id = p.id
     LEFT JOIN min_price_row mr ON mr.product_id = p.id
     ${productFilter}
