@@ -58,23 +58,37 @@ const Quotations = {
               </tr></thead>
               <tbody>${requests.map(r => {
                 const expired = new Date(r.expires_at) < now;
-                const answered = !!r.last_filled_at;
-                const status = expired
-                  ? '<span class="badge badge-danger">Expirado</span>'
-                  : answered
-                    ? '<span class="badge badge-success">Respondido</span>'
-                    : '<span class="badge badge-warning">Aguardando</span>';
+                const filled = r.filled_count || 0;
+                const total = r.item_count || 0;
+                const pct = total > 0 ? Math.round(filled / total * 100) : 0;
+                const hasAny = filled > 0;
+                let status;
+                if (expired) {
+                  status = '<span class="badge badge-danger">Expirado</span>';
+                } else if (filled === 0) {
+                  status = '<span class="badge badge-warning">Aguardando</span>';
+                } else if (filled >= total) {
+                  status = '<span class="badge badge-success">Respondido</span>';
+                } else {
+                  status = `<div>
+                    <span class="badge badge-warning">Parcial</span>
+                    <div class="progress-wrap">
+                      <div class="progress-bar" style="width:${pct}%"></div>
+                    </div>
+                    <span class="progress-label">${filled}/${total} itens</span>
+                  </div>`;
+                }
                 const url = `${location.origin}/cotacao/${r.token}`;
                 return `<tr>
                   <td><span class="badge badge-gold">#${String(r.id).padStart(4, '0')}</span></td>
                   <td>${escHtml(r.title || '—')}</td>
                   <td>${escHtml(r.churrascaria_name)}</td>
                   <td>${escHtml(r.company_name)}</td>
-                  <td style="text-align:center">${r.item_count}</td>
+                  <td style="text-align:center">${total}</td>
                   <td>${status}</td>
                   <td style="font-size:12px;white-space:nowrap">${fmtDate(r.expires_at)}</td>
                   <td style="white-space:nowrap">
-                    ${answered ? `<button class="btn btn-outline btn-sm" onclick="PriceRequest.view(${r.id})" title="Ver cotação">👁 Ver</button>` : ''}
+                    ${hasAny ? `<button class="btn btn-outline btn-sm" onclick="PriceRequest.view(${r.id})" title="Ver cotação">👁 Ver</button>` : ''}
                     <button class="btn btn-outline btn-sm" data-url="${escHtml(url)}"
                       onclick="PriceRequest.copyLink(this.dataset.url)" title="Copiar link">🔗 Link</button>
                     <button class="btn btn-outline btn-sm" style="color:var(--danger);border-color:var(--danger)"

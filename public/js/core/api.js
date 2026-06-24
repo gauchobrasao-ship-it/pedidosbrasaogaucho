@@ -30,6 +30,7 @@ const API = {
   get:    (p)    => API.req('GET', p),
   post:   (p, d) => API.req('POST', p, d),
   put:    (p, d) => API.req('PUT', p, d),
+  patch:  (p, d) => API.req('PATCH', p, d),
   delete: (p)    => API.req('DELETE', p),
 };
 

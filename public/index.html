@@ -59,6 +59,13 @@
         <span class="topbar-title" id="topbar-title">Dashboard</span>
       </div>
       <div class="topbar-right">
+        <div style="position:relative">
+          <button id="notif-btn" onclick="Notifications.toggle()" class="notif-btn" title="Notificações">
+            🔔
+            <span id="notif-badge" class="notif-badge" style="display:none">0</span>
+          </button>
+          <div id="notif-panel" class="notif-panel" style="display:none"></div>
+        </div>
         <button id="theme-toggle" onclick="Theme.toggle()"
           style="background:none;border:1px solid var(--border);border-radius:8px;padding:6px 10px;cursor:pointer;font-size:16px;line-height:1;color:var(--gray);"
           title="Alternar modo claro/escuro"></button>
@@ -117,6 +124,7 @@
 <script src="/js/core/theme.js"></script>
 <script src="/js/core/api.js"></script>
 <script src="/js/core/app.js"></script>
+<script src="/js/core/notifications.js"></script>
 <script src="/js/components/dashboard.js"></script>
 <script src="/js/components/orders.js"></script>
 <script src="/js/components/quotations.js"></script>

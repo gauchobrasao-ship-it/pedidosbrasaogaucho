@@ -46,7 +46,8 @@ router.get('/', authMiddleware, async (req, res) => {
     const { rows } = await pool.query(`
       SELECT pr.id, pr.token, pr.title, pr.expires_at, pr.last_filled_at, pr.created_at,
              ch.name as churrascaria_name, c.name as company_name,
-             COUNT(pri.id)::int as item_count
+             COUNT(pri.id)::int as item_count,
+             COUNT(CASE WHEN pri.unit_price IS NOT NULL OR pri.ruptura THEN 1 END)::int as filled_count
       FROM price_requests pr
       JOIN churrascarias ch ON ch.id = pr.churrascaria_id
       JOIN companies c ON c.id = pr.company_id
@@ -151,6 +152,30 @@ router.post('/:token/submit', async (req, res) => {
         const price     = parseFloat(item.unit_price);
         const bulkQty   = parseFloat(item.bulk_min_qty) > 0 ? parseFloat(item.bulk_min_qty) : null;
         const bulkPrice = parseFloat(item.bulk_price)   > 0 ? parseFloat(item.bulk_price)   : null;
+
+        const { rows: cpRows } = await client.query(
+          `SELECT price, p.name as product_name FROM company_products cp
+           JOIN products p ON p.id = cp.product_id
+           WHERE cp.churrascaria_id = $1 AND cp.company_id = $2 AND cp.product_id = $3`,
+          [request.churrascaria_id, request.company_id, item.product_id]
+        );
+        const oldPrice = parseFloat(cpRows[0]?.price || 0);
+        if (oldPrice > 0 && price > oldPrice * 1.05) {
+          const pct = ((price - oldPrice) / oldPrice * 100).toFixed(1);
+          const productName = cpRows[0]?.product_name || `Produto #${item.product_id}`;
+          const { rows: compRows } = await client.query('SELECT name FROM companies WHERE id = $1', [request.company_id]);
+          const companyName = compRows[0]?.name || 'fornecedor';
+          await client.query(
+            `INSERT INTO notifications (type, title, body, entity_id) VALUES ($1,$2,$3,$4)`,
+            [
+              'price_increase',
+              `Aumento de preço: ${productName}`,
+              `${productName} subiu ${pct}% (de R$ ${oldPrice.toFixed(2)} para R$ ${price.toFixed(2)}) na cotação de ${companyName}.`,
+              request.id,
+            ]
+          );
+        }
+
         await client.query(`
           INSERT INTO company_products (churrascaria_id, company_id, product_id, price, bulk_min_qty, bulk_price, active)
           VALUES ($1,$2,$3,$4,$5,$6,1)

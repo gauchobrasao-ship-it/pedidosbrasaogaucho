@@ -80,6 +80,7 @@ const App = {
     document.getElementById('app-page').style.display = 'flex';
     this.renderNav();
     document.getElementById('topbar-user').textContent = this.user.name;
+    Notifications.init();
   },
 
   canDo(perm) {
