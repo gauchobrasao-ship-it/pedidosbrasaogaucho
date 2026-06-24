@@ -67,7 +67,11 @@ const Products = {
         <div class="card">
           <div class="card-header">
             <span class="card-title">Produtos</span>
-            ${App.canDo('manage_products') ? `<button class="btn btn-primary" onclick="Products.openForm()">+ Novo Produto</button>` : ''}
+            ${App.canDo('manage_products') ? `
+              <div style="display:flex;gap:8px">
+                <button class="btn btn-outline" onclick="Products.openBulkAssign()">⚡ Edição em massa</button>
+                <button class="btn btn-primary" onclick="Products.openForm()">+ Novo Produto</button>
+              </div>` : ''}
           </div>
           <div class="search-bar mb-16">
             <div class="search-input-wrap">
@@ -354,6 +358,89 @@ const Products = {
                 document.getElementById('prod-filter-cat')?.value || '',
                 document.getElementById('prod-filter-company')?.value || '');
       this.openForm(null, data.category_id, data.unit);
+    } catch (err) { toast(err.message, 'error'); }
+  },
+
+  async openBulkAssign() {
+    const { cats, companies, churrs } = await this._loadFormData();
+
+    showModal(
+      '⚡ Edição em Massa — Vincular Fornecedor',
+      `<div style="font-size:13px;color:var(--gray);margin-bottom:16px;line-height:1.6">
+         Selecione uma categoria, um fornecedor e as churrascarias.<br>
+         O fornecedor será adicionado a <strong style="color:var(--white)">todos os produtos</strong> da categoria selecionada.<br>
+         Vínculos existentes não serão alterados.
+       </div>
+       <div class="form-group">
+         <label class="form-label">Categoria *</label>
+         <select class="form-control" id="ba-cat" onchange="Products._bulkPreview()">
+           <option value="">Selecione uma categoria...</option>
+           ${cats.map(c => `<option value="${c.id}">${escHtml(c.name)}</option>`).join('')}
+         </select>
+       </div>
+       <div class="form-group">
+         <label class="form-label">Fornecedor a vincular *</label>
+         <select class="form-control" id="ba-company" onchange="Products._bulkPreview()">
+           <option value="">Selecione um fornecedor...</option>
+           ${companies.map(c => `<option value="${c.id}">${escHtml(c.name)}</option>`).join('')}
+         </select>
+       </div>
+       <div class="form-group">
+         <label class="form-label">Churrascarias *</label>
+         <div style="display:flex;flex-direction:column;gap:8px;margin-top:4px">
+           ${churrs.map(ch => `
+             <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:14px;color:var(--white)">
+               <input type="checkbox" class="ba-churr-cb" value="${ch.id}"
+                 style="width:16px;height:16px;accent-color:var(--orange);cursor:pointer"
+                 onchange="Products._bulkPreview()" checked>
+               🔥 ${escHtml(ch.name)}
+             </label>`).join('')}
+         </div>
+       </div>
+       <div id="ba-preview" style="margin-top:4px"></div>`,
+      `<button class="btn btn-outline" onclick="closeModal()">Cancelar</button>
+       <button class="btn btn-primary" onclick="Products.bulkAssign()">Vincular</button>`
+    );
+  },
+
+  async _bulkPreview() {
+    const catId = document.getElementById('ba-cat').value;
+    const el = document.getElementById('ba-preview');
+    if (!catId) { el.innerHTML = ''; return; }
+    try {
+      const params = new URLSearchParams({ category_id: catId });
+      const products = await API.get('/products?' + params);
+      const count = (products || []).length;
+      el.innerHTML = count > 0
+        ? `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:10px 14px;font-size:13px;color:var(--gray)">
+             <strong style="color:var(--gold);font-size:15px">${count}</strong> produto${count !== 1 ? 's' : ''} serão afetados nesta categoria.
+           </div>`
+        : `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:10px 14px;font-size:13px;color:var(--gray)">
+             Nenhum produto nesta categoria.
+           </div>`;
+    } catch (_) {}
+  },
+
+  async bulkAssign() {
+    const catId = document.getElementById('ba-cat').value;
+    const companyId = document.getElementById('ba-company').value;
+    const churrIds = [...document.querySelectorAll('.ba-churr-cb:checked')].map(cb => Number(cb.value));
+    if (!catId) { toast('Selecione uma categoria', 'error'); return; }
+    if (!companyId) { toast('Selecione um fornecedor', 'error'); return; }
+    if (!churrIds.length) { toast('Selecione pelo menos uma churrascaria', 'error'); return; }
+    try {
+      const result = await API.post('/products/bulk-assign', {
+        category_id: Number(catId),
+        company_id: Number(companyId),
+        churrascaria_ids: churrIds,
+      });
+      closeModal();
+      toast(`Fornecedor vinculado a ${result.affected} produto${result.affected !== 1 ? 's' : ''}!`);
+      this.load(
+        document.getElementById('prod-search')?.value || '',
+        document.getElementById('prod-filter-cat')?.value || '',
+        document.getElementById('prod-filter-company')?.value || ''
+      );
     } catch (err) { toast(err.message, 'error'); }
   },
 

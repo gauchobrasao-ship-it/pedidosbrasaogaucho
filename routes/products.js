@@ -182,4 +182,35 @@ router.post('/:id/companies/batch', authMiddleware, requirePermission('manage_pr
   }
 });
 
+router.post('/bulk-assign', authMiddleware, requirePermission('manage_products'), async (req, res) => {
+  const { category_id, company_id, churrascaria_ids } = req.body;
+  if (!category_id || !company_id || !churrascaria_ids?.length) {
+    return res.status(400).json({ error: 'Categoria, fornecedor e churrascaria são obrigatórios' });
+  }
+  try {
+    const { rows: products } = await pool.query(
+      `SELECT id FROM products WHERE category_id = $1 AND active = 1`,
+      [category_id]
+    );
+    if (!products.length) return res.json({ affected: 0 });
+
+    const ops = [];
+    for (const { id: productId } of products) {
+      for (const churrId of churrascaria_ids) {
+        ops.push(pool.query(`
+          INSERT INTO company_products (churrascaria_id, company_id, product_id, price, active)
+          VALUES ($1, $2, $3, 0, 1)
+          ON CONFLICT (churrascaria_id, company_id, product_id)
+          DO UPDATE SET active = 1, updated_at = NOW()
+        `, [churrId, company_id, productId]));
+      }
+    }
+    await Promise.all(ops);
+    res.json({ affected: products.length });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
 module.exports = router;
