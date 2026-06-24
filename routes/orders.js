@@ -54,20 +54,20 @@ router.get('/:id', authMiddleware, requirePermission('view_orders'), async (req,
   `;
   query += buildChurrFilter(req.user, params);
   try {
-    const { rows } = await pool.query(query, params);
-    const order = rows[0];
+    const [orderResult, itemsResult] = await Promise.all([
+      pool.query(query, params),
+      pool.query(`
+        SELECT oi.*, p.name as product_name, p.unit, cat.name as category_name
+        FROM order_items oi
+        JOIN products p ON p.id = oi.product_id
+        LEFT JOIN categories cat ON cat.id = p.category_id
+        WHERE oi.order_id = $1
+        ORDER BY cat.name, p.name
+      `, [req.params.id]),
+    ]);
+    const order = orderResult.rows[0];
     if (!order) return res.status(404).json({ error: 'Pedido não encontrado' });
-
-    const { rows: items } = await pool.query(`
-      SELECT oi.*, p.name as product_name, p.unit, cat.name as category_name
-      FROM order_items oi
-      JOIN products p ON p.id = oi.product_id
-      LEFT JOIN categories cat ON cat.id = p.category_id
-      WHERE oi.order_id = $1
-      ORDER BY cat.name, p.name
-    `, [req.params.id]);
-
-    order.items = items;
+    order.items = itemsResult.rows;
     res.json(order);
   } catch (err) {
     console.error(err);
@@ -91,20 +91,31 @@ router.post('/', authMiddleware, requirePermission('create_orders'), async (req,
         [churrascaria_id, company_id, req.user.id, observations || null, total]
       );
       const id = rows[0].id;
+
+      // Batch insert all items in one query
+      const itemPlaceholders = [];
+      const itemParams = [id];
       for (const item of validItems) {
         const qty = parseFloat(item.quantity);
         const price = parseFloat(item.unit_price || 0);
-        await client.query(
-          'INSERT INTO order_items (order_id, product_id, quantity, unit_price, subtotal) VALUES ($1,$2,$3,$4,$5)',
-          [id, item.product_id, qty, price, qty * price]
-        );
-        if (price > 0) {
-          await client.query(
-            'UPDATE company_products SET price = $1, updated_at = NOW() WHERE churrascaria_id = $2 AND company_id = $3 AND product_id = $4',
-            [price, churrascaria_id, company_id, item.product_id]
-          );
-        }
+        const base = itemParams.length;
+        itemPlaceholders.push(`($1,$${base+1},$${base+2},$${base+3},$${base+4})`);
+        itemParams.push(item.product_id, qty, price, qty * price);
       }
+      await client.query(
+        `INSERT INTO order_items (order_id, product_id, quantity, unit_price, subtotal) VALUES ${itemPlaceholders.join(',')}`,
+        itemParams
+      );
+
+      // Parallel price updates for company_products
+      await Promise.all(
+        validItems
+          .filter(i => parseFloat(i.unit_price || 0) > 0)
+          .map(i => client.query(
+            'UPDATE company_products SET price=$1, updated_at=NOW() WHERE churrascaria_id=$2 AND company_id=$3 AND product_id=$4',
+            [parseFloat(i.unit_price), churrascaria_id, company_id, i.product_id]
+          ))
+      );
       return id;
     });
     res.json({ id: orderId, message: 'Pedido criado com sucesso' });
@@ -132,32 +143,33 @@ router.delete('/:id', authMiddleware, requirePermission('view_orders'), async (r
 
 router.get('/:id/pdf', async (req, res) => {
   try {
-    const { rows } = await pool.query(`
-      SELECT o.*, ch.name as churrascaria_name, ch.address as churrascaria_address,
-             ch.phone as churrascaria_phone, ch.cnpj as churrascaria_cnpj,
-             c.name as company_name, c.cnpj as company_cnpj, c.phone as company_phone,
-             c.email as company_email, c.address as company_address, c.contact_name as company_contact,
-             u.name as user_name
-      FROM orders o
-      JOIN churrascarias ch ON ch.id = o.churrascaria_id
-      JOIN companies c ON c.id = o.company_id
-      JOIN users u ON u.id = o.user_id
-      WHERE o.id = $1
-    `, [req.params.id]);
-    const order = rows[0];
+    const [orderResult, itemsResult] = await Promise.all([
+      pool.query(`
+        SELECT o.*, ch.name as churrascaria_name, ch.address as churrascaria_address,
+               ch.phone as churrascaria_phone, ch.cnpj as churrascaria_cnpj,
+               c.name as company_name, c.cnpj as company_cnpj, c.phone as company_phone,
+               c.email as company_email, c.address as company_address, c.contact_name as company_contact,
+               u.name as user_name
+        FROM orders o
+        JOIN churrascarias ch ON ch.id = o.churrascaria_id
+        JOIN companies c ON c.id = o.company_id
+        JOIN users u ON u.id = o.user_id
+        WHERE o.id = $1
+      `, [req.params.id]),
+      pool.query(`
+        SELECT oi.*, p.name as product_name, p.unit, cat.name as category_name
+        FROM order_items oi
+        JOIN products p ON p.id = oi.product_id
+        LEFT JOIN categories cat ON cat.id = p.category_id
+        WHERE oi.order_id = $1
+        ORDER BY cat.name, p.name
+      `, [req.params.id]),
+    ]);
+    const order = orderResult.rows[0];
     if (!order) return res.status(404).json({ error: 'Pedido não encontrado' });
-
-    const { rows: items } = await pool.query(`
-      SELECT oi.*, p.name as product_name, p.unit, cat.name as category_name
-      FROM order_items oi
-      JOIN products p ON p.id = oi.product_id
-      LEFT JOIN categories cat ON cat.id = p.category_id
-      WHERE oi.order_id = $1
-      ORDER BY cat.name, p.name
-    `, [req.params.id]);
-
-    order.items = items;
+    order.items = itemsResult.rows;
     const pdfBuffer = await generateOrderPDF(order);
+
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `inline; filename=pedido-${String(order.id).padStart(6,'0')}.pdf`);
     res.send(pdfBuffer);

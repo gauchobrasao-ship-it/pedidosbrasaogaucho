@@ -44,20 +44,20 @@ router.get('/:id', authMiddleware, requirePermission('manage_quotations'), async
   const allowed = getAllowedChurrascarias(req.user);
   if (allowed) { params.push(allowed); query += ` AND q.churrascaria_id = ANY($${params.length}::int[])`; }
   try {
-    const { rows } = await pool.query(query, params);
-    const quotation = rows[0];
+    const [quotationResult, itemsResult] = await Promise.all([
+      pool.query(query, params),
+      pool.query(`
+        SELECT qi.*, p.name as product_name, p.unit, cat.name as category_name
+        FROM quotation_items qi
+        JOIN products p ON p.id = qi.product_id
+        LEFT JOIN categories cat ON cat.id = p.category_id
+        WHERE qi.quotation_id = $1
+        ORDER BY cat.name, p.name
+      `, [req.params.id]),
+    ]);
+    const quotation = quotationResult.rows[0];
     if (!quotation) return res.status(404).json({ error: 'Cotação não encontrada' });
-
-    const { rows: items } = await pool.query(`
-      SELECT qi.*, p.name as product_name, p.unit, cat.name as category_name
-      FROM quotation_items qi
-      JOIN products p ON p.id = qi.product_id
-      LEFT JOIN categories cat ON cat.id = p.category_id
-      WHERE qi.quotation_id = $1
-      ORDER BY cat.name, p.name
-    `, [req.params.id]);
-
-    quotation.items = items;
+    quotation.items = itemsResult.rows;
     res.json(quotation);
   } catch (err) {
     console.error(err);
@@ -77,16 +77,25 @@ router.post('/', authMiddleware, requirePermission('manage_quotations'), async (
       );
       const id = rows[0].id;
       if (items && items.length > 0) {
+        // Batch insert all quotation items in one query
+        const itemPlaceholders = [];
+        const itemParams = [id];
         for (const item of items) {
-          await client.query(
-            'INSERT INTO quotation_items (quotation_id, product_id, previous_price, new_price) VALUES ($1,$2,$3,$4)',
-            [id, item.product_id, item.previous_price || 0, item.new_price || 0]
-          );
-          await client.query(
-            'UPDATE company_products SET price = $1, updated_at = NOW() WHERE churrascaria_id = $2 AND company_id = $3 AND product_id = $4',
-            [item.new_price || 0, churrascaria_id, company_id, item.product_id]
-          );
+          const base = itemParams.length;
+          itemPlaceholders.push(`($1,$${base+1},$${base+2},$${base+3})`);
+          itemParams.push(item.product_id, item.previous_price || 0, item.new_price || 0);
         }
+        await client.query(
+          `INSERT INTO quotation_items (quotation_id, product_id, previous_price, new_price) VALUES ${itemPlaceholders.join(',')}`,
+          itemParams
+        );
+        // Parallel price updates
+        await Promise.all(items.map(item =>
+          client.query(
+            'UPDATE company_products SET price=$1, updated_at=NOW() WHERE churrascaria_id=$2 AND company_id=$3 AND product_id=$4',
+            [item.new_price || 0, churrascaria_id, company_id, item.product_id]
+          )
+        ));
       }
       return id;
     });
