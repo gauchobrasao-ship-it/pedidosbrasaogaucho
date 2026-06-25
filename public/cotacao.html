@@ -118,25 +118,26 @@
     .m-btn-sub:disabled{opacity:.45;cursor:not-allowed}
     .m-hint{font-size:12px;color:var(--gray);text-align:center;margin-top:10px;line-height:1.5}
     .m-filled-notice{background:#43A04718;border:1px solid #43A04740;border-radius:8px;padding:10px 14px;font-size:13px;color:var(--success);margin-bottom:12px}
-    /* Botão ruptura */
-    .btn-ruptura{display:inline-flex;align-items:center;gap:5px;background:transparent;border:1px solid #E5393540;color:#E53935;font-size:12px;font-weight:700;padding:7px 12px;border-radius:8px;cursor:pointer;margin-top:12px;transition:background .15s,border-color .15s;letter-spacing:.3px}
+    /* Botões de status (Ruptura / Inativo) */
+    .btn-status-group{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap}
+    .btn-ruptura{display:inline-flex;align-items:center;gap:5px;background:transparent;border:1px solid #E5393540;color:#E53935;font-size:11px;font-weight:700;padding:6px 10px;border-radius:8px;cursor:pointer;transition:background .15s,border-color .15s;letter-spacing:.3px}
     .btn-ruptura:hover{background:#E5393514;border-color:#E53935}
     .btn-ruptura.active{background:#E5393520;border-color:#E53935;color:#ff6b6b}
-    .m-btn-ruptura{display:flex;align-items:center;justify-content:center;gap:6px;background:transparent;border:1px solid #E5393540;color:#E53935;font-size:13px;font-weight:700;padding:12px;border-radius:10px;cursor:pointer;margin-top:14px;width:100%;transition:background .15s,border-color .15s}
+    .btn-inativo{display:inline-flex;align-items:center;gap:5px;background:transparent;border:1px solid #60708040;color:#607080;font-size:11px;font-weight:700;padding:6px 10px;border-radius:8px;cursor:pointer;transition:background .15s,border-color .15s;letter-spacing:.3px}
+    .btn-inativo:hover{background:#60708014;border-color:#607080}
+    .btn-inativo.active{background:#60708025;border-color:#8090A0;color:#90A4AE}
+    .m-status-group{display:flex;gap:8px;margin-top:14px}
+    .m-btn-ruptura{display:flex;align-items:center;justify-content:center;gap:6px;background:transparent;border:1px solid #E5393540;color:#E53935;font-size:13px;font-weight:700;padding:12px;border-radius:10px;cursor:pointer;flex:1;transition:background .15s,border-color .15s}
     .m-btn-ruptura:hover{background:#E5393514;border-color:#E53935}
     .m-btn-ruptura.active{background:#E5393520;border-color:#E53935;color:#ff6b6b}
-    /* Card em ruptura */
-    .m-card-ruptura{border-color:#E5393540;background:#221B1B}
-    .m-ruptura-badge{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:700;color:#E53935;margin-bottom:8px;text-transform:uppercase;letter-spacing:.6px}
-    /* Card bloqueado (já enviado) */
-    .m-card-locked{border-color:#43A04740;background:#1B221E}
-    .m-locked-badge{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:700;color:var(--success);margin-bottom:8px;text-transform:uppercase;letter-spacing:.6px}
-    .m-locked-prod-name{font-size:16px;font-weight:800;color:var(--white);opacity:.7;margin-bottom:2px}
-    .m-locked-brand{font-size:11px;color:var(--gray);margin-bottom:8px}
-    .m-locked-prices{display:flex;align-items:baseline;gap:16px;margin-top:6px;flex-wrap:wrap}
-    .m-locked-price-val{font-size:22px;font-weight:800;color:var(--gold)}
-    .m-locked-price-label{font-size:11px;color:var(--gray);margin-bottom:2px}
-    .m-locked-bulk-val{font-size:16px;font-weight:700;color:var(--orange)}
+    .m-btn-inativo{display:flex;align-items:center;justify-content:center;gap:6px;background:transparent;border:1px solid #60708040;color:#607080;font-size:13px;font-weight:700;padding:12px;border-radius:10px;cursor:pointer;flex:1;transition:background .15s,border-color .15s}
+    .m-btn-inativo:hover{background:#60708014;border-color:#607080}
+    .m-btn-inativo.active{background:#60708025;border-color:#8090A0;color:#90A4AE}
+    /* Badges de estado do item */
+    .m-sent-badge{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;color:var(--success);margin-bottom:6px;text-transform:uppercase;letter-spacing:.6px}
+    .m-edited-badge{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;color:var(--orange);margin-bottom:6px;text-transform:uppercase;letter-spacing:.6px}
+    .m-ruptura-badge{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;color:#E53935;margin-bottom:6px;text-transform:uppercase;letter-spacing:.6px}
+    .m-inativo-badge{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;color:#8090A0;margin-bottom:6px;text-transform:uppercase;letter-spacing:.6px}
   </style>
 </head>
 <body>
@@ -192,41 +193,57 @@
   }
 
   const _rupturaSet = new Set();
+  const _inativoSet = new Set();
 
-  function toggleRupturaDesktop(productId) {
-    const btn = document.getElementById('rup-' + productId);
-    const unitInput = document.getElementById('p-' + productId);
-    const bqInput   = document.getElementById('bq-' + productId);
-    const bpInput   = document.getElementById('bp-' + productId);
-    if (_rupturaSet.has(productId)) {
-      _rupturaSet.delete(productId);
-      btn.classList.remove('active');
-      btn.textContent = '⚠ Ruptura';
-      [unitInput, bqInput, bpInput].forEach(el => { if(el) el.disabled = false; });
+  function toggleStatus(productId, status) {
+    const btnR = document.getElementById('rup-' + productId);
+    const btnI = document.getElementById('ina-' + productId);
+    const inputs = ['p-', 'bq-', 'bp-'].map(p => document.getElementById(p + productId));
+
+    const clickedWasActive = status === 'ruptura' ? _rupturaSet.has(productId) : _inativoSet.has(productId);
+
+    // Desativa ambos
+    _rupturaSet.delete(productId);
+    _inativoSet.delete(productId);
+    if (btnR) { btnR.classList.remove('active'); btnR.innerHTML = '⚠ Ruptura'; }
+    if (btnI) { btnI.classList.remove('active'); btnI.innerHTML = '✗ Inativo'; }
+
+    if (!clickedWasActive) {
+      // Ativa o clicado
+      if (status === 'ruptura') {
+        _rupturaSet.add(productId);
+        if (btnR) { btnR.classList.add('active'); btnR.innerHTML = '✓ Ruptura'; }
+      } else {
+        _inativoSet.add(productId);
+        if (btnI) { btnI.classList.add('active'); btnI.innerHTML = '✓ Inativo'; }
+      }
+      // Limpa e desabilita inputs
+      inputs.forEach(el => { if(el) { el.disabled = true; el.value = ''; el.classList.remove('ok'); } });
     } else {
-      _rupturaSet.add(productId);
-      btn.classList.add('active');
-      btn.textContent = '✓ Ruptura marcada';
-      [unitInput, bqInput, bpInput].forEach(el => { if(el) { el.disabled = true; el.value = ''; el.classList.remove('ok'); } });
+      // Reabilita inputs
+      inputs.forEach(el => { if(el) el.disabled = false; });
     }
   }
 
-  function toggleRupturaMobile(productId) {
-    const btn = document.getElementById('rup-' + productId);
-    const unitInput = document.getElementById('p-' + productId);
-    const bqInput   = document.getElementById('bq-' + productId);
-    const bpInput   = document.getElementById('bp-' + productId);
-    if (_rupturaSet.has(productId)) {
-      _rupturaSet.delete(productId);
-      btn.classList.remove('active');
-      btn.textContent = '⚠ Ruptura';
-      [unitInput, bqInput, bpInput].forEach(el => { if(el) el.disabled = false; });
-    } else {
-      _rupturaSet.add(productId);
-      btn.classList.add('active');
-      btn.textContent = '✓ Ruptura marcada';
-      [unitInput, bqInput, bpInput].forEach(el => { if(el) { el.disabled = true; el.value = ''; el.classList.remove('ok'); } });
-    }
+  function initStatusFromData(items) {
+    items.forEach(i => {
+      if (i.ruptura) {
+        _rupturaSet.add(i.product_id);
+        const btn = document.getElementById('rup-' + i.product_id);
+        if (btn) { btn.classList.add('active'); btn.innerHTML = '✓ Ruptura'; }
+        ['p-','bq-','bp-'].forEach(p => { const el = document.getElementById(p + i.product_id); if(el) el.disabled = true; });
+      } else if (i.inativo) {
+        _inativoSet.add(i.product_id);
+        const btn = document.getElementById('ina-' + i.product_id);
+        if (btn) { btn.classList.add('active'); btn.innerHTML = '✓ Inativo'; }
+        ['p-','bq-','bp-'].forEach(p => { const el = document.getElementById(p + i.product_id); if(el) el.disabled = true; });
+      }
+      // Marca inputs pré-preenchidos como ok
+      const inp = document.getElementById('p-' + i.product_id);
+      if (inp && inp.value) inp.classList.add('ok');
+      const bp = document.getElementById('bp-' + i.product_id);
+      if (bp && bp.value) bp.classList.add('ok');
+    });
   }
 
   function setupPriceInputs(unitClass, bulkClass) {
@@ -254,10 +271,6 @@
   function renderDesktop(d){
     const grouped = {};
     d.items.forEach(i => { const c=i.category_name||'Geral'; if(!grouped[c]) grouped[c]=[]; grouped[c].push(i); });
-
-    const filledNotice = d.last_filled_at
-      ? `<div class="filled-notice">✓ Preços já enviados em ${fmt(d.last_filled_at)}. Você pode enviar novamente para atualizar.</div>`
-      : '';
 
     const rows = Object.entries(grouped).map(([cat,items]) => `
       <div class="cat-bar">${esc(cat)}</div>
@@ -287,10 +300,17 @@
               placeholder="0,00" value="${prevBulk ? formatFromCents(prevBulk) : ''}">
             <span class="bulk-label">(opcional)</span>
           </div>
-          <button class="btn-ruptura" id="rup-${i.product_id}" onclick="toggleRupturaDesktop(${i.product_id})">⚠ Ruptura</button>
+          <div class="btn-status-group">
+            <button class="btn-ruptura" id="rup-${i.product_id}" onclick="toggleStatus(${i.product_id},'ruptura')">⚠ Ruptura</button>
+            <button class="btn-inativo" id="ina-${i.product_id}" onclick="toggleStatus(${i.product_id},'inativo')">✗ Inativo</button>
+          </div>
         </div>`;
       }).join('')}
     `).join('');
+
+    const filledNoticeText = d.last_filled_at
+      ? `<div class="filled-notice">✓ Preços enviados em ${fmt(d.last_filled_at)}. Você pode editar e reenviar enquanto a cotação estiver dentro do prazo.</div>`
+      : '';
 
     document.getElementById('root').innerHTML = `
       <div class="desktop-wrap">
@@ -300,7 +320,7 @@
           ${d.title ? `<div class="info-row"><span class="il">Referência</span><span class="iv">${esc(d.title)}</span></div>` : ''}
           <div class="info-row"><span class="il">Válido até</span><span class="iv">${fmt(d.expires_at)}</span></div>
         </div>
-        ${filledNotice}
+        ${filledNoticeText}
         <div class="sec-title">Produtos (${d.items.length})</div>
         ${rows}
         <div class="notes-wrap">
@@ -314,48 +334,23 @@
       </div>`;
 
     setupPriceInputs('.pi', '.pi-sm[data-price]');
+    initStatusFromData(d.items);
   }
 
   /* ══════════════════════════════════════════
      MOBILE
   ══════════════════════════════════════════ */
-  function renderLockedCard(i) {
-    if (i.ruptura) {
-      return `
-      <div class="m-card m-card-ruptura">
-        <div class="m-ruptura-badge">⚠ Ruptura</div>
-        ${i.category_name ? `<div class="m-cat-tag">${esc(i.category_name)}</div>` : ''}
-        <div class="m-locked-prod-name">${esc(i.product_name)}</div>
-        ${i.brand ? `<div class="m-locked-brand">🏷 ${esc(i.brand)}</div>` : ''}
-        <div style="font-size:12px;color:var(--gray);margin-top:6px">Produto indisponível informado</div>
-      </div>`;
-    }
-    const unitFmt  = 'R$ ' + parseFloat(i.unit_price).toFixed(2).replace('.', ',');
-    const bulkFmt  = i.bulk_price > 0 ? 'R$ ' + parseFloat(i.bulk_price).toFixed(2).replace('.', ',') : null;
-    return `
-    <div class="m-card m-card-locked">
-      <div class="m-locked-badge">✓ Enviado</div>
-      ${i.category_name ? `<div class="m-cat-tag">${esc(i.category_name)}</div>` : ''}
-      <div class="m-locked-prod-name">${esc(i.product_name)}</div>
-      ${i.brand ? `<div class="m-locked-brand">🏷 ${esc(i.brand)}</div>` : ''}
-      <div class="m-locked-prices">
-        <div>
-          <div class="m-locked-price-label">Unitário</div>
-          <div class="m-locked-price-val">${unitFmt}</div>
-        </div>
-        ${bulkFmt ? `<div>
-          <div class="m-locked-price-label">Volume</div>
-          <div class="m-locked-bulk-val">${bulkFmt}</div>
-        </div>` : ''}
-      </div>
-    </div>`;
-  }
-
   function renderEditableCard(i) {
     const prevUnit = i.unit_price > 0 ? String(Math.round(i.unit_price * 100)) : '';
     const prevBulk = i.bulk_price > 0 ? String(Math.round(i.bulk_price * 100)) : '';
+    let statusBadge = '';
+    if (i.inativo)       statusBadge = `<div class="m-inativo-badge">✗ Fora de portfólio</div>`;
+    else if (i.ruptura)  statusBadge = `<div class="m-ruptura-badge">⚠ Ruptura</div>`;
+    else if (i.edited_at) statusBadge = `<div class="m-edited-badge">✏ Editado</div>`;
+    else if (i.unit_price > 0) statusBadge = `<div class="m-sent-badge">✓ Enviado</div>`;
     return `
     <div class="m-card">
+      ${statusBadge}
       ${i.category_name ? `<div class="m-cat-tag">${esc(i.category_name)}</div>` : ''}
       <div class="m-prod-name">${esc(i.product_name)}</div>
       ${i.brand ? `<div class="m-prod-brand">🏷 ${esc(i.brand)}</div>` : ''}
@@ -380,22 +375,23 @@
             id="bp-${i.product_id}" placeholder="0,00" value="${prevBulk ? formatFromCents(prevBulk) : ''}">
         </div>
       </div>
-      <button class="m-btn-ruptura" id="rup-${i.product_id}" onclick="toggleRupturaMobile(${i.product_id})">⚠ Ruptura</button>
+      <div class="m-status-group">
+        <button class="m-btn-ruptura" id="rup-${i.product_id}" onclick="toggleStatus(${i.product_id},'ruptura')">⚠ Ruptura</button>
+        <button class="m-btn-inativo" id="ina-${i.product_id}" onclick="toggleStatus(${i.product_id},'inativo')">✗ Inativo</button>
+      </div>
     </div>`;
   }
 
   function renderMobile(d){
-    const locked  = d.items.filter(i => i.unit_price > 0 || i.ruptura);
-    const pending = d.items.filter(i => !(i.unit_price > 0) && !i.ruptura);
-    const total   = d.items.length;
-    const lockedCount = locked.length;
+    const total = d.items.length;
+    const doneCount = d.items.filter(i => i.unit_price > 0 || i.ruptura || i.inativo).length;
+    const allDone = doneCount === total;
 
-    const cards = [
-      ...locked.map(renderLockedCard),
-      ...pending.map(renderEditableCard),
-    ].join('');
+    const cards = d.items.map(renderEditableCard).join('');
 
-    const allDone = pending.length === 0;
+    const allDoneNotice = allDone
+      ? `<div class="m-filled-notice">✓ Todos os ${total} produtos enviados. Você pode editar e reenviar enquanto a cotação estiver dentro do prazo.</div>`
+      : '';
 
     document.getElementById('root').innerHTML = `
       <div class="mobile-wrap" style="display:block">
@@ -408,15 +404,15 @@
 
         <div class="m-progress-wrap">
           <div class="m-progress-label">
-            <span>${lockedCount > 0 ? `${lockedCount} enviado${lockedCount>1?'s':''}` : 'Produtos'}</span>
-            <span><span id="m-filled-count">${lockedCount}</span> de ${total} concluídos</span>
+            <span>Preenchidos</span>
+            <span><span id="m-filled-count">${doneCount}</span> de ${total}</span>
           </div>
-          <div class="m-progress-bar"><div class="m-progress-fill" id="m-progress-fill" style="width:${lockedCount/total*100}%"></div></div>
+          <div class="m-progress-bar"><div class="m-progress-fill" id="m-progress-fill" style="width:${doneCount/total*100}%"></div></div>
         </div>
 
+        ${allDoneNotice}
         ${cards}
 
-        ${!allDone ? `
         <div class="m-notes">
           <div class="m-notes-title">Ofertas e Observações</div>
           <textarea class="m-notes-ta" id="vendor-notes"
@@ -424,43 +420,43 @@
         </div>
         <button class="m-btn-sub" id="btn-sub" onclick="submitForm()">Enviar Preços</button>
         <p class="m-hint">Preencha apenas os produtos disponíveis.<br>Campos em branco serão ignorados.<br>Você pode enviar em partes e continuar depois.</p>
-        ` : `
-        <div style="text-align:center;padding:24px 16px">
-          <div style="font-size:40px;margin-bottom:12px">✅</div>
-          <div style="font-size:17px;font-weight:800;color:var(--success);margin-bottom:6px">Cotação completa!</div>
-          <div style="font-size:13px;color:var(--gray);line-height:1.6">Todos os ${total} produtos foram enviados.<br>Obrigado!</div>
-        </div>
-        `}
       </div>`;
 
-    if (!allDone) {
-      setupPriceInputs('.m-pi', '.m-pi-bulk-price[data-price]');
-      setupProgressTracker(total, lockedCount);
-    }
+    setupPriceInputs('.m-pi', '.m-pi-bulk-price[data-price]');
+    setupProgressTracker(total);
+    initStatusFromData(d.items);
   }
 
-  function setupProgressTracker(total, alreadyLocked = 0) {
-    const inputs = document.querySelectorAll('.m-pi');
+  function setupProgressTracker(total) {
     function update() {
-      let filled = alreadyLocked;
-      inputs.forEach(el => { if (el.classList.contains('ok')) filled++; });
+      let filled = 0;
+      _data.items.forEach(i => {
+        if (_rupturaSet.has(i.product_id) || _inativoSet.has(i.product_id)) {
+          filled++;
+        } else {
+          const el = document.getElementById('p-' + i.product_id);
+          if (el && el.classList.contains('ok')) filled++;
+        }
+      });
       document.getElementById('m-filled-count').textContent = filled;
       document.getElementById('m-progress-fill').style.width = (filled / total * 100) + '%';
     }
-    inputs.forEach(el => el.addEventListener('input', update));
+    document.querySelectorAll('.m-pi').forEach(el => el.addEventListener('input', update));
+    update();
   }
 
   /* ══════════════════════════════════════════
      SUBMIT
   ══════════════════════════════════════════ */
   function submitForm(){
-    // Coleta apenas itens pendentes (sem preço bloqueado e sem ruptura já registrada)
-    const pendentes = _data.items.filter(i => !(i.unit_price > 0) && !i.ruptura);
-    const rupturaItems = pendentes
+    const rupturaItems = _data.items
       .filter(i => _rupturaSet.has(i.product_id))
       .map(i => ({ product_id: i.product_id, ruptura: true }));
-    const items = pendentes
-      .filter(i => !_rupturaSet.has(i.product_id))
+    const inativoItems = _data.items
+      .filter(i => _inativoSet.has(i.product_id))
+      .map(i => ({ product_id: i.product_id, inativo: true }));
+    const items = _data.items
+      .filter(i => !_rupturaSet.has(i.product_id) && !_inativoSet.has(i.product_id))
       .map(i => ({
         product_id:   i.product_id,
         unit_price:   readPrice('p-'+i.product_id),
@@ -468,24 +464,20 @@
         bulk_price:   readPrice('bp-'+i.product_id),
       }))
       .filter(i => i.unit_price > 0);
-    if(!items.length && !rupturaItems.length){ alert('Preencha pelo menos um preço ou marque Ruptura antes de enviar.'); return; }
-    window._submitItems = items;
-    window._submitRuptura = rupturaItems;
-    window._submitNotes = document.getElementById('vendor-notes')?.value?.trim() || null;
 
-    const pending  = _data.items.filter(i => !(i.unit_price > 0) && !i.ruptura).length;
-    const sending  = items.length + rupturaItems.length;
-    const leftover = pending - sending;
-    // Atualizar mensagem do popup conforme sobrar itens
+    if(!items.length && !rupturaItems.length && !inativoItems.length){
+      alert('Preencha pelo menos um preço ou marque Ruptura/Inativo antes de enviar.');
+      return;
+    }
+    window._submitItems  = items;
+    window._submitRuptura = rupturaItems;
+    window._submitInativo = inativoItems;
+    window._submitNotes  = document.getElementById('vendor-notes')?.value?.trim() || null;
+
     const popupMsg = document.querySelector('.popup-msg');
     if (popupMsg) {
-      popupMsg.innerHTML = leftover > 0
-        ? `Revise os valores digitados antes de enviar.<br>
-           Lembre-se: <strong style="color:var(--white)">R$ 3,33</strong> deve ser digitado como <strong style="color:var(--white)">3,33</strong>.<br><br>
-           Após enviar, esses <strong style="color:var(--white)">${sending} produto(s)</strong> serão bloqueados.
-           Você poderá preencher os <strong style="color:var(--gold)">${leftover} restantes</strong> depois.`
-        : `Revise os valores digitados antes de enviar.<br>
-           Lembre-se: <strong style="color:var(--white)">R$ 3,33</strong> deve ser digitado como <strong style="color:var(--white)">3,33</strong> — não como <strong style="color:var(--danger)">333</strong>.`;
+      popupMsg.innerHTML = `Revise os valores digitados antes de enviar.<br>
+        Lembre-se: <strong style="color:var(--white)">R$ 3,33</strong> deve ser digitado como <strong style="color:var(--white)">3,33</strong> — não como <strong style="color:var(--danger)">333</strong>.`;
     }
     document.getElementById('popup').style.display = 'flex';
   }
@@ -497,29 +489,32 @@
     try{
       const res = await fetch('/api/price-requests/'+token+'/submit',{
         method:'POST', headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({items: [...window._submitItems, ...(window._submitRuptura||[])], vendor_notes: window._submitNotes})
+        body:JSON.stringify({
+          items: [...window._submitItems, ...(window._submitRuptura||[]), ...(window._submitInativo||[])],
+          vendor_notes: window._submitNotes
+        })
       });
       const data = await res.json();
       if(!res.ok){ alert(data.error||'Erro ao enviar.'); if(btn){ btn.disabled=false; btn.textContent='Enviar Preços'; } return; }
 
-      // Bloquear itens recém-enviados em _data
+      // Atualiza _data localmente com os valores enviados
       window._submitItems.forEach(sent => {
         const item = _data.items.find(i => i.product_id === sent.product_id);
-        if(item){ item.unit_price = sent.unit_price; item.bulk_price = sent.bulk_price; item.bulk_min_qty = sent.bulk_min_qty; item.ruptura = false; }
+        if(item){ item.unit_price = sent.unit_price; item.bulk_price = sent.bulk_price; item.bulk_min_qty = sent.bulk_min_qty; item.ruptura = false; item.inativo = false; }
       });
       (window._submitRuptura||[]).forEach(sent => {
         const item = _data.items.find(i => i.product_id === sent.product_id);
-        if(item){ item.ruptura = true; item.unit_price = null; }
+        if(item){ item.ruptura = true; item.unit_price = null; item.inativo = false; }
       });
+      (window._submitInativo||[]).forEach(sent => {
+        const item = _data.items.find(i => i.product_id === sent.product_id);
+        if(item){ item.inativo = true; item.unit_price = null; item.ruptura = false; }
+      });
+      _data.last_filled_at = new Date().toISOString();
       _rupturaSet.clear();
+      _inativoSet.clear();
 
-      const stillPending = _data.items.filter(i => !(i.unit_price > 0) && !i.ruptura);
-      if(stillPending.length > 0){
-        // Envio parcial — re-renderiza com itens bloqueados + pendentes
-        IS_MOBILE ? renderMobile(_data) : renderDesktop(_data);
-      } else {
-        renderSuccess(_data.items.length);
-      }
+      IS_MOBILE ? renderMobile(_data) : renderDesktop(_data);
     }catch(e){ alert('Erro de conexão.'); if(btn){ btn.disabled=false; btn.textContent='Enviar Preços'; } }
   }
 

@@ -88,7 +88,7 @@ router.get('/:id/detail', authMiddleware, async (req, res) => {
         WHERE pr.id = $1
       `, [req.params.id]),
       pool.query(`
-        SELECT pri.product_id, pri.quantity, pri.unit_price, pri.bulk_min_qty, pri.bulk_price, pri.ruptura,
+        SELECT pri.product_id, pri.quantity, pri.unit_price, pri.bulk_min_qty, pri.bulk_price, pri.ruptura, pri.inativo, pri.edited_at,
                p.name as product_name, p.unit, p.brand, cat.name as category_name
         FROM price_request_items pri
         JOIN products p ON p.id = pri.product_id
@@ -124,7 +124,7 @@ router.get('/:token', async (req, res) => {
     }
 
     const { rows: items } = await pool.query(`
-      SELECT pri.product_id, pri.quantity, pri.unit_price, pri.bulk_min_qty, pri.bulk_price, pri.ruptura,
+      SELECT pri.product_id, pri.quantity, pri.unit_price, pri.bulk_min_qty, pri.bulk_price, pri.ruptura, pri.inativo, pri.edited_at,
              p.name as product_name, p.unit, p.brand, cat.name as category_name
       FROM price_request_items pri
       JOIN products p ON p.id = pri.product_id
@@ -151,10 +151,19 @@ router.post('/:token/submit', async (req, res) => {
     if (new Date(request.expires_at) < new Date()) return res.status(410).json({ error: 'Link expirado' });
 
     const rupturaItems = items.filter(i => i.ruptura);
+    const inativoItems = items.filter(i => i.inativo);
     const filled = items.filter(i => parseFloat(i.unit_price) > 0);
-    if (!filled.length && !rupturaItems.length) return res.status(400).json({ error: 'Informe pelo menos um preço ou marque ruptura' });
+    if (!filled.length && !rupturaItems.length && !inativoItems.length)
+      return res.status(400).json({ error: 'Informe pelo menos um preço ou marque ruptura/inativo' });
 
-    // Pre-fetch old prices and company name in parallel — avoids N+1 inside the loop
+    // Fetch existing item states to detect edits (price change on already-submitted item)
+    const existingItemsResult = await pool.query(
+      'SELECT product_id, unit_price, ruptura, inativo FROM price_request_items WHERE request_id = $1',
+      [request.id]
+    );
+    const existingItemMap = new Map(existingItemsResult.rows.map(r => [String(r.product_id), r]));
+
+    // Pre-fetch old prices and company name in parallel
     const filledProductIds = filled.map(i => i.product_id);
     const [existingPrices, companyResult] = await Promise.all([
       filledProductIds.length > 0
@@ -175,8 +184,19 @@ router.post('/:token/submit', async (req, res) => {
       const ops = [];
 
       for (const item of rupturaItems) {
+        const existing = existingItemMap.get(String(item.product_id));
+        const isEdit = existing && (existing.unit_price !== null || existing.ruptura || existing.inativo);
         ops.push(client.query(
-          `UPDATE price_request_items SET ruptura=true, unit_price=NULL, bulk_min_qty=NULL, bulk_price=NULL WHERE request_id=$1 AND product_id=$2`,
+          `UPDATE price_request_items SET ruptura=true, inativo=false, unit_price=NULL, bulk_min_qty=NULL, bulk_price=NULL${isEdit ? ', edited_at=NOW()' : ''} WHERE request_id=$1 AND product_id=$2`,
+          [request.id, item.product_id]
+        ));
+      }
+
+      for (const item of inativoItems) {
+        const existing = existingItemMap.get(String(item.product_id));
+        const isEdit = existing && (existing.unit_price !== null || existing.ruptura || existing.inativo);
+        ops.push(client.query(
+          `UPDATE price_request_items SET inativo=true, ruptura=false, unit_price=NULL, bulk_min_qty=NULL, bulk_price=NULL${isEdit ? ', edited_at=NOW()' : ''} WHERE request_id=$1 AND product_id=$2`,
           [request.id, item.product_id]
         ));
       }
@@ -207,13 +227,14 @@ router.post('/:token/submit', async (req, res) => {
           DO UPDATE SET price=EXCLUDED.price, bulk_min_qty=EXCLUDED.bulk_min_qty, bulk_price=EXCLUDED.bulk_price, updated_at=NOW()
         `, [request.churrascaria_id, request.company_id, item.product_id, price, bulkQty, bulkPrice]));
 
+        const existingItem = existingItemMap.get(String(item.product_id));
+        const isEdit = existingItem && existingItem.unit_price !== null;
         ops.push(client.query(
-          `UPDATE price_request_items SET unit_price=$1, bulk_min_qty=$2, bulk_price=$3, ruptura=false WHERE request_id=$4 AND product_id=$5`,
+          `UPDATE price_request_items SET unit_price=$1, bulk_min_qty=$2, bulk_price=$3, ruptura=false, inativo=false${isEdit ? ', edited_at=NOW()' : ''} WHERE request_id=$4 AND product_id=$5`,
           [price, bulkQty, bulkPrice, request.id, item.product_id]
         ));
       }
 
-      // Batch insert all notifications in one query
       if (notifications.length > 0) {
         const notifPlaceholders = notifications.map((_, i) =>
           `($${i*4+1},$${i*4+2},$${i*4+3},$${i*4+4})`

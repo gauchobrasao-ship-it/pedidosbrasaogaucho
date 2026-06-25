@@ -609,23 +609,31 @@ const PriceRequest = {
 
       const rows = Object.entries(grouped).map(([cat, items]) => `
         <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--gold);padding:10px 0 5px;border-bottom:1px solid var(--border);margin-bottom:6px">${escHtml(cat)}</div>
-        ${items.map(i => `
+        ${items.map(i => {
+          let badge = '';
+          if (i.inativo)       badge = `<span style="font-size:10px;font-weight:700;color:#8090A0;text-transform:uppercase;letter-spacing:.5px">✗ Fora de portfólio</span>`;
+          else if (i.ruptura)  badge = `<span style="font-size:10px;font-weight:700;color:#E53935;text-transform:uppercase;letter-spacing:.5px">⚠ Ruptura</span>`;
+          else if (i.edited_at) badge = `<span style="font-size:10px;font-weight:700;color:var(--orange);text-transform:uppercase;letter-spacing:.5px">✏ Editado</span>`;
+          return `
           <div style="background:var(--card2);border:1px solid var(--border);border-radius:8px;padding:10px 14px;margin-bottom:6px">
             <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap">
               <div>
+                ${badge ? `<div style="margin-bottom:4px">${badge}</div>` : ''}
                 <div style="font-weight:600;font-size:14px">${escHtml(i.product_name)}</div>
                 <div style="font-size:12px;color:var(--gray);margin-top:2px">Qtd solicitada: ${i.quantity} ${escHtml(i.unit||'un')}</div>
               </div>
               <div style="text-align:right">
+                ${!i.ruptura && !i.inativo ? `
                 <div style="font-size:13px">Unit.: <strong style="color:var(--gold)">${fmt(i.unit_price)}</strong></div>
                 ${i.bulk_min_qty && i.bulk_price
                   ? `<div style="font-size:12px;color:var(--gray);margin-top:2px">
                        A partir de ${i.bulk_min_qty} ${escHtml(i.unit||'un')}: <strong style="color:var(--success)">${fmt(i.bulk_price)}</strong>
                      </div>`
-                  : ''}
+                  : ''}` : ''}
               </div>
             </div>
-          </div>`).join('')}
+          </div>`;
+        }).join('')}
       `).join('');
 
       showModal(`Cotação — ${escHtml(d.company_name)}`, `
