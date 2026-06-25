@@ -221,8 +221,16 @@ const Products = {
     showModal(
       id ? 'Editar Produto' : 'Novo Produto',
       `<div class="form-group">
-         <label class="form-label">Nome *</label>
-         <input class="form-control" id="pf-name" value="${escHtml(product.name || '')}" placeholder="Nome do produto...">
+         <label class="form-label">Nome${isNew ? '(s)' : ''} *</label>
+         ${isNew
+           ? `<div id="pf-names-container" style="display:flex;flex-direction:column;gap:6px">
+                <div class="pf-name-row" style="display:flex;gap:6px;align-items:center">
+                  <input class="form-control pf-name-input" placeholder="Nome do produto...">
+                </div>
+              </div>
+              <button type="button" class="btn btn-outline btn-sm" id="pf-add-name-btn" onclick="Products.addNameField()" style="margin-top:8px">+ Adicionar produto</button>
+              <div style="font-size:11px;color:var(--gray);margin-top:3px">Mesma categoria, unidade e fornecedores — até 5 de uma vez</div>`
+           : `<input class="form-control" id="pf-name" value="${escHtml(product.name || '')}" placeholder="Nome do produto...">`}
        </div>
        <div class="form-group">
          <label class="form-label">Marca(s)</label>
@@ -263,7 +271,8 @@ const Products = {
        ${isNew ? `<button class="btn btn-gold" onclick="Products.saveAndNew()">Salvar e criar outro</button>` : ''}
        <button class="btn btn-primary" onclick="Products.save(${id || 'null'})">Salvar</button>`
     );
-    document.getElementById('pf-name').focus();
+    const firstInput = document.getElementById('pf-name') || document.querySelector('.pf-name-input');
+    if (firstInput) firstInput.focus();
   },
 
   toggleChurrPrice(companyId, churrId) {
@@ -314,26 +323,39 @@ const Products = {
   },
 
   async save(id) {
-    const data = {
-      name: document.getElementById('pf-name').value.trim(),
-      category_id: document.getElementById('pf-cat').value || null,
-      unit: document.getElementById('pf-unit').value,
-      brand: document.getElementById('pf-brand')?.value.trim() || null,
-    };
-    if (!data.name) { toast('Nome é obrigatório', 'error'); return; }
+    const category_id = document.getElementById('pf-cat').value || null;
+    const unit        = document.getElementById('pf-unit').value;
+    const brand       = document.getElementById('pf-brand')?.value.trim() || null;
+
+    if (id) {
+      const name = document.getElementById('pf-name').value.trim();
+      if (!name) { toast('Nome é obrigatório', 'error'); return; }
+      try {
+        await API.put(`/products/${id}`, { name, category_id, unit, brand });
+        await this._saveCompanyLinks(id);
+        this.lastCategoryId = category_id || '';
+        this.lastUnit = unit;
+        closeModal();
+        toast('Produto atualizado!');
+        this.load(document.getElementById('prod-search')?.value || '',
+                  document.getElementById('prod-filter-cat')?.value || '',
+                  document.getElementById('prod-filter-company')?.value || '');
+      } catch (err) { toast(err.message, 'error'); }
+      return;
+    }
+
+    const names = [...document.querySelectorAll('.pf-name-input')]
+      .map(el => el.value.trim()).filter(Boolean);
+    if (!names.length) { toast('Nome é obrigatório', 'error'); return; }
     try {
-      let productId = id;
-      if (id) {
-        await API.put(`/products/${id}`, data);
-      } else {
-        const result = await API.post('/products', data);
-        productId = result.id;
+      for (const name of names) {
+        const result = await API.post('/products', { name, category_id, unit, brand });
+        await this._saveCompanyLinks(result.id);
       }
-      await this._saveCompanyLinks(productId);
-      this.lastCategoryId = data.category_id || '';
-      this.lastUnit = data.unit;
+      this.lastCategoryId = category_id || '';
+      this.lastUnit = unit;
       closeModal();
-      toast(id ? 'Produto atualizado!' : 'Produto criado!');
+      toast(names.length > 1 ? `${names.length} produtos criados!` : 'Produto criado!');
       this.load(document.getElementById('prod-search')?.value || '',
                 document.getElementById('prod-filter-cat')?.value || '',
                 document.getElementById('prod-filter-company')?.value || '');
@@ -341,23 +363,24 @@ const Products = {
   },
 
   async saveAndNew() {
-    const data = {
-      name: document.getElementById('pf-name').value.trim(),
-      category_id: document.getElementById('pf-cat').value || null,
-      unit: document.getElementById('pf-unit').value,
-      brand: document.getElementById('pf-brand')?.value.trim() || null,
-    };
-    if (!data.name) { toast('Nome é obrigatório', 'error'); return; }
+    const category_id = document.getElementById('pf-cat').value || null;
+    const unit        = document.getElementById('pf-unit').value;
+    const brand       = document.getElementById('pf-brand')?.value.trim() || null;
+    const names = [...document.querySelectorAll('.pf-name-input')]
+      .map(el => el.value.trim()).filter(Boolean);
+    if (!names.length) { toast('Nome é obrigatório', 'error'); return; }
     try {
-      const result = await API.post('/products', data);
-      await this._saveCompanyLinks(result.id);
-      this.lastCategoryId = data.category_id || '';
-      this.lastUnit = data.unit;
-      toast('Produto criado! Abrindo novo cadastro...');
+      for (const name of names) {
+        const result = await API.post('/products', { name, category_id, unit, brand });
+        await this._saveCompanyLinks(result.id);
+      }
+      this.lastCategoryId = category_id || '';
+      this.lastUnit = unit;
+      toast(names.length > 1 ? `${names.length} produtos criados! Abrindo novo cadastro...` : 'Produto criado! Abrindo novo cadastro...');
       this.load(document.getElementById('prod-search')?.value || '',
                 document.getElementById('prod-filter-cat')?.value || '',
                 document.getElementById('prod-filter-company')?.value || '');
-      this.openForm(null, data.category_id, data.unit);
+      this.openForm(null, category_id, unit);
     } catch (err) { toast(err.message, 'error'); }
   },
 
@@ -442,6 +465,30 @@ const Products = {
         document.getElementById('prod-filter-company')?.value || ''
       );
     } catch (err) { toast(err.message, 'error'); }
+  },
+
+  addNameField() {
+    const container = document.getElementById('pf-names-container');
+    const rows = container.querySelectorAll('.pf-name-row');
+    if (rows.length >= 5) { toast('Máximo de 5 produtos por vez', 'warning'); return; }
+    const row = document.createElement('div');
+    row.className = 'pf-name-row';
+    row.style.cssText = 'display:flex;gap:6px;align-items:center';
+    row.innerHTML = `<input class="form-control pf-name-input" placeholder="Nome do produto ${rows.length + 1}...">
+      <button type="button" onclick="this.parentElement.remove();Products._updateAddBtn()"
+        style="background:none;border:1px solid var(--border);border-radius:6px;color:var(--gray);cursor:pointer;padding:5px 10px;font-size:18px;line-height:1;flex-shrink:0" title="Remover">×</button>`;
+    container.appendChild(row);
+    row.querySelector('input').focus();
+    if (container.querySelectorAll('.pf-name-row').length >= 5) {
+      document.getElementById('pf-add-name-btn').style.display = 'none';
+    }
+  },
+
+  _updateAddBtn() {
+    const container = document.getElementById('pf-names-container');
+    if (!container) return;
+    const btn = document.getElementById('pf-add-name-btn');
+    if (btn) btn.style.display = container.querySelectorAll('.pf-name-row').length >= 5 ? 'none' : '';
   },
 
   async delete(id) {
