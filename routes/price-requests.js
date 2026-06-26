@@ -23,17 +23,26 @@ router.post('/', authMiddleware, async (req, res) => {
     compRows.forEach(r => { companyNames[r.id] = r.name; });
   } catch (_) {}
 
-  // Build batch-insert SQL for price_request_items (reused per company)
-  const itemPlaceholders = [];
-  const itemParamBase = []; // [product_id, quantity, ...]
-  for (const item of items) {
-    const base = itemParamBase.length;
-    itemPlaceholders.push(`($1,$${base+2},$${base+3})`);
-    itemParamBase.push(item.product_id, item.quantity);
-  }
-  const itemSql = `INSERT INTO price_request_items (request_id, product_id, quantity) VALUES ${itemPlaceholders.join(',')}`;
-
   try {
+    // Fetch the most recent inativo state per (company, product) from previous cotações
+    const productIds = items.map(i => i.product_id);
+    const { rows: prevInativoRows } = await pool.query(`
+      SELECT DISTINCT ON (pr.company_id, pri.product_id) pr.company_id, pri.product_id, pri.inativo
+      FROM price_request_items pri
+      JOIN price_requests pr ON pr.id = pri.request_id
+      WHERE pr.company_id = ANY($1::int[]) AND pr.churrascaria_id = $2
+        AND pri.product_id = ANY($3::int[])
+      ORDER BY pr.company_id, pri.product_id, pr.created_at DESC
+    `, [company_ids, churrascaria_id, productIds]);
+
+    // Map: companyId -> Set<productId> that were inativo in their last cotação
+    const inativoByCompany = {};
+    prevInativoRows.forEach(r => {
+      if (!r.inativo) return;
+      if (!inativoByCompany[r.company_id]) inativoByCompany[r.company_id] = new Set();
+      inativoByCompany[r.company_id].add(Number(r.product_id));
+    });
+
     const requests = await withTransaction(async (client) => {
       return Promise.all(company_ids.map(async (companyId) => {
         const token = crypto.randomBytes(16).toString('hex');
@@ -43,7 +52,19 @@ router.post('/', authMiddleware, async (req, res) => {
           [token, churrascaria_id, companyId, title || null, req.user.id, expiresAt.toISOString()]
         );
         const requestId = rows[0].id;
-        await client.query(itemSql, [requestId, ...itemParamBase]);
+        const compInativo = inativoByCompany[companyId] || new Set();
+
+        const valParts = [];
+        const params = [requestId];
+        for (const item of items) {
+          valParts.push(`($1,$${params.length+1},$${params.length+2},$${params.length+3})`);
+          params.push(item.product_id, item.quantity, compInativo.has(Number(item.product_id)));
+        }
+        await client.query(
+          `INSERT INTO price_request_items (request_id, product_id, quantity, inativo) VALUES ${valParts.join(',')}`,
+          params
+        );
+
         return { token, company_id: companyId, company_name: companyNames[companyId], url: `${baseUrl}/cotacao/${token}` };
       }));
     });
@@ -60,7 +81,7 @@ router.get('/', authMiddleware, async (req, res) => {
       SELECT pr.id, pr.token, pr.title, pr.expires_at, pr.last_filled_at, pr.created_at,
              ch.name as churrascaria_name, c.name as company_name,
              COUNT(pri.id)::int as item_count,
-             COUNT(CASE WHEN pri.unit_price IS NOT NULL OR pri.ruptura THEN 1 END)::int as filled_count
+             COUNT(CASE WHEN pri.unit_price IS NOT NULL OR pri.ruptura OR pri.inativo THEN 1 END)::int as filled_count
       FROM price_requests pr
       JOIN churrascarias ch ON ch.id = pr.churrascaria_id
       JOIN companies c ON c.id = pr.company_id
