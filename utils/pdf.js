@@ -274,4 +274,118 @@ function generateCatalogPDF({ rows, churrascaria_name }) {
   });
 }
 
-module.exports = { generateOrderPDF, generateCatalogPDF };
+function generateProductsPDF(products) {
+  return new Promise((resolve, reject) => {
+    const doc = new PDFDocument({ margin: 0, size: 'A4' });
+    const chunks = [];
+    doc.on('data', chunk => chunks.push(chunk));
+    doc.on('end', () => resolve(Buffer.concat(chunks)));
+    doc.on('error', reject);
+
+    const W = doc.page.width;
+    const MARGIN = 40;
+    const CW = W - MARGIN * 2;
+    const ROW_H = 20;
+    const CAT_H = 22;
+    const TH_H  = 20;
+
+    const COL = {
+      name:     { x: MARGIN,       w: 195 },
+      category: { x: MARGIN + 195, w: 100 },
+      unit:     { x: MARGIN + 295, w: 30  },
+      company:  { x: MARGIN + 325, w: 100 },
+      price:    { x: MARGIN + 425, w: CW - 425 },
+    };
+
+    // Header
+    doc.rect(0, 0, W, 90).fill(COLORS.dark);
+    doc.rect(0, 90, W, 4).fill(COLORS.orange);
+    doc.fillColor(COLORS.gold).fontSize(18).font('Helvetica-Bold')
+      .text('CATÁLOGO DE PRODUTOS', MARGIN, 20, { width: CW, align: 'center' });
+    doc.fillColor(COLORS.gray).fontSize(9).font('Helvetica')
+      .text(`Gerado em ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}`, MARGIN, 54, { width: CW, align: 'center' });
+
+    function drawTableHeader(y) {
+      doc.rect(MARGIN, y, CW, TH_H).fill(COLORS.dark);
+      doc.fillColor(COLORS.gold).fontSize(7.5).font('Helvetica-Bold')
+        .text('PRODUTO',        COL.name.x     + 6, y + 6, { width: COL.name.w })
+        .text('CATEGORIA',      COL.category.x,      y + 6, { width: COL.category.w })
+        .text('UN',             COL.unit.x,           y + 6, { width: COL.unit.w })
+        .text('FORNECEDOR',     COL.company.x,        y + 6, { width: COL.company.w })
+        .text('MENOR PREÇO',    COL.price.x,          y + 6, { width: COL.price.w });
+      return y + TH_H;
+    }
+
+    // Group by category
+    const catMap = new Map();
+    for (const p of products) {
+      const cat = p.category_name || 'Sem Categoria';
+      if (!catMap.has(cat)) catMap.set(cat, []);
+      catMap.get(cat).push(p);
+    }
+
+    let y = 108;
+    y = drawTableHeader(y);
+
+    let rowIdx = 0;
+    for (const [catName, prods] of catMap) {
+      if (y + CAT_H + ROW_H > doc.page.height - 50) {
+        doc.addPage({ margin: 0, size: 'A4' });
+        y = 40;
+        y = drawTableHeader(y);
+      }
+      doc.rect(MARGIN, y, CW, CAT_H).fill(COLORS.darkCard);
+      doc.fillColor(COLORS.gold).fontSize(8.5).font('Helvetica-Bold')
+        .text(catName.toUpperCase(), MARGIN + 8, y + 7, { width: CW - 16 });
+      y += CAT_H;
+
+      for (const p of prods) {
+        if (y + ROW_H > doc.page.height - 50) {
+          doc.addPage({ margin: 0, size: 'A4' });
+          y = 40;
+          y = drawTableHeader(y);
+        }
+        const bg = rowIdx % 2 === 0 ? COLORS.white : COLORS.rowAlt;
+        doc.rect(MARGIN, y, CW, ROW_H).fill(bg);
+        doc.fillColor(COLORS.dark).fontSize(8.5).font('Helvetica-Bold')
+          .text(p.name, COL.name.x + 6, y + 6, { width: COL.name.w - 6, ellipsis: true });
+        if (p.brand) {
+          doc.fillColor(COLORS.gray).fontSize(7).font('Helvetica')
+            .text(p.brand, COL.name.x + 6, y + 14, { width: COL.name.w - 6, ellipsis: true });
+        }
+        doc.fillColor(COLORS.dark).fontSize(8).font('Helvetica')
+          .text(p.category_name || '—', COL.category.x, y + 6, { width: COL.category.w, ellipsis: true })
+          .text(p.unit || 'un',         COL.unit.x,      y + 6, { width: COL.unit.w });
+        if (p.min_price_company) {
+          doc.text(p.min_price_company, COL.company.x, y + 6, { width: COL.company.w, ellipsis: true });
+        } else {
+          doc.fillColor(COLORS.gray).text('—', COL.company.x, y + 6, { width: COL.company.w });
+        }
+        if (p.min_price) {
+          doc.fillColor(COLORS.orange).font('Helvetica-Bold')
+            .text(fmt(p.min_price), COL.price.x, y + 6, { width: COL.price.w });
+        } else {
+          doc.fillColor(COLORS.gray).font('Helvetica')
+            .text('—', COL.price.x, y + 6, { width: COL.price.w });
+        }
+        y += ROW_H;
+        rowIdx++;
+      }
+    }
+
+    if (!products.length) {
+      doc.fillColor(COLORS.gray).fontSize(12).font('Helvetica')
+        .text('Nenhum produto encontrado.', MARGIN, y + 20, { width: CW, align: 'center' });
+    }
+
+    const footerY = doc.page.height - 36;
+    doc.rect(0, footerY, W, 36).fill(COLORS.dark);
+    doc.fillColor(COLORS.gray).fontSize(7.5).font('Helvetica')
+      .text(`Brasão Gaúcho · Gerado em ${new Date().toLocaleString('pt-BR')}`,
+        MARGIN, footerY + 13, { width: CW, align: 'center' });
+
+    doc.end();
+  });
+}
+
+module.exports = { generateOrderPDF, generateCatalogPDF, generateProductsPDF };

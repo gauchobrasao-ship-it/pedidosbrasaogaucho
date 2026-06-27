@@ -1,20 +1,25 @@
 const express = require('express');
+const xlsx = require('xlsx');
 const { pool } = require('../database/db');
 const { authMiddleware, requirePermission } = require('../middleware/auth');
+const { generateProductsPDF } = require('../utils/pdf');
 
 const router = express.Router();
 
 router.get('/', authMiddleware, async (req, res) => {
-  const { search, category_id, company_id } = req.query;
+  const { search, category_ids, company_id } = req.query;
   const params = [];
   let productFilter = 'WHERE p.active = 1';
   if (search) {
     params.push(`%${search}%`);
     productFilter += ` AND (p.name ILIKE $${params.length} OR cat.name ILIKE $${params.length})`;
   }
-  if (category_id) {
-    params.push(category_id);
-    productFilter += ` AND p.category_id = $${params.length}`;
+  if (category_ids) {
+    const ids = category_ids.split(',').map(Number).filter(Boolean);
+    if (ids.length > 0) {
+      params.push(ids);
+      productFilter += ` AND p.category_id = ANY($${params.length}::int[])`;
+    }
   }
   if (company_id) {
     params.push(company_id);
@@ -106,6 +111,90 @@ router.put('/:id', authMiddleware, requirePermission('manage_products'), async (
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
+router.get('/export', authMiddleware, async (req, res) => {
+  const { category_ids, format } = req.query;
+  const params = [];
+  let productFilter = 'WHERE p.active = 1';
+  if (category_ids) {
+    const ids = category_ids.split(',').map(Number).filter(Boolean);
+    if (ids.length > 0) {
+      params.push(ids);
+      productFilter += ` AND p.category_id = ANY($${params.length}::int[])`;
+    }
+  }
+  try {
+    const { rows } = await pool.query(`
+      WITH link_stats AS (
+        SELECT cp.product_id,
+               COUNT(DISTINCT cp.company_id)::int as company_count,
+               array_agg(DISTINCT co.name ORDER BY co.name) as company_names
+        FROM company_products cp
+        JOIN companies co ON co.id = cp.company_id AND co.active = 1
+        WHERE cp.active = 1
+        GROUP BY cp.product_id
+      ),
+      price_stats AS (
+        SELECT cp.product_id, MIN(cp.price) as min_price
+        FROM company_products cp
+        JOIN companies co ON co.id = cp.company_id AND co.active = 1
+        WHERE cp.active = 1 AND cp.price > 0
+        GROUP BY cp.product_id
+      ),
+      min_price_row AS (
+        SELECT DISTINCT ON (cp.product_id)
+               cp.product_id, co.name as min_price_company, cp.updated_at as min_price_updated_at
+        FROM company_products cp
+        JOIN companies co ON co.id = cp.company_id AND co.active = 1
+        WHERE cp.active = 1 AND cp.price > 0
+        ORDER BY cp.product_id, cp.price ASC
+      )
+      SELECT p.id, p.name, p.brand, p.unit,
+             cat.name as category_name,
+             COALESCE(ls.company_count, 0) as company_count,
+             ls.company_names,
+             ps.min_price,
+             mr.min_price_company,
+             mr.min_price_updated_at
+      FROM products p
+      LEFT JOIN categories cat ON cat.id = p.category_id
+      LEFT JOIN link_stats ls ON ls.product_id = p.id
+      LEFT JOIN price_stats ps ON ps.product_id = p.id
+      LEFT JOIN min_price_row mr ON mr.product_id = p.id
+      ${productFilter}
+      ORDER BY cat.name, p.name
+    `, params);
+
+    if (format === 'xlsx') {
+      const sheetData = rows.map(p => ({
+        'Produto':              p.name,
+        'Marca':                p.brand || '',
+        'Categoria':            p.category_name || 'Sem categoria',
+        'Unidade':              p.unit || 'un',
+        'Nº Fornecedores':      p.company_count || 0,
+        'Menor Preço (R$)':     p.min_price ? parseFloat(p.min_price).toFixed(2).replace('.', ',') : '',
+        'Fornecedor Mais Barato': p.min_price_company || '',
+        'Atualizado em':        p.min_price_updated_at ? new Date(p.min_price_updated_at).toLocaleDateString('pt-BR') : '',
+      }));
+      const wb = xlsx.utils.book_new();
+      const ws = xlsx.utils.json_to_sheet(sheetData);
+      ws['!cols'] = [40,20,20,10,12,16,30,16].map(w => ({ wch: w }));
+      xlsx.utils.book_append_sheet(wb, ws, 'Produtos');
+      const buf = xlsx.write(wb, { type: 'buffer', bookType: 'xlsx' });
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', 'attachment; filename=produtos.xlsx');
+      return res.send(buf);
+    }
+
+    const pdfBuffer = await generateProductsPDF(rows);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'inline; filename=produtos.pdf');
+    res.send(pdfBuffer);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Erro ao exportar' });
   }
 });
 

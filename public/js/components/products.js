@@ -40,19 +40,114 @@ const Products = {
 
   _searchTimer: null,
 
-  debouncedLoad(search, categoryId, companyId) {
-    clearTimeout(this._searchTimer);
-    this._searchTimer = setTimeout(() => this.load(search, categoryId, companyId), 280);
+  _getCatIds() {
+    return [...document.querySelectorAll('.prod-cat-check:checked')].map(el => el.value).join(',');
   },
 
-  async load(search = '', categoryId = '', companyId = '') {
+  _catLabel(catIds) {
+    if (!catIds) return 'Todas as categorias';
+    const ids = catIds.split(',').filter(Boolean);
+    if (!ids.length) return 'Todas as categorias';
+    const names = ids.map(id => {
+      const cat = this.categories.find(c => String(c.id) === String(id));
+      return cat ? cat.name : '';
+    }).filter(Boolean);
+    if (names.length === 1) return names[0];
+    return `${names.length} categorias`;
+  },
+
+  toggleCatDropdown() {
+    const dd = document.getElementById('prod-cat-dropdown');
+    if (!dd) return;
+    const isOpen = dd.style.display !== 'none';
+    dd.style.display = isOpen ? 'none' : 'block';
+    if (!isOpen) {
+      setTimeout(() => {
+        const handler = (e) => {
+          if (!dd.contains(e.target) && e.target.id !== 'prod-cat-btn') {
+            dd.style.display = 'none';
+            document.removeEventListener('click', handler);
+          }
+        };
+        document.addEventListener('click', handler);
+      }, 0);
+    }
+  },
+
+  _onCatAllChange(el) {
+    if (el.checked) {
+      document.querySelectorAll('.prod-cat-check').forEach(c => { c.checked = false; });
+    }
+    this._applyCatFilter();
+  },
+
+  _onCatChange() {
+    const anyChecked = [...document.querySelectorAll('.prod-cat-check:checked')].length > 0;
+    const allEl = document.getElementById('prod-cat-all');
+    if (allEl) allEl.checked = !anyChecked;
+    this._applyCatFilter();
+  },
+
+  _applyCatFilter() {
+    const catIds = this._getCatIds();
+    const label = document.getElementById('prod-cat-label');
+    if (label) label.textContent = this._catLabel(catIds);
+    this.load(
+      document.getElementById('prod-search')?.value || '',
+      catIds,
+      document.getElementById('prod-filter-company')?.value || ''
+    );
+  },
+
+  toggleExportMenu() {
+    const menu = document.getElementById('prod-export-menu');
+    if (!menu) return;
+    const isOpen = menu.style.display !== 'none';
+    menu.style.display = isOpen ? 'none' : 'block';
+    if (!isOpen) {
+      setTimeout(() => {
+        const handler = (e) => {
+          if (!menu.contains(e.target) && e.target.id !== 'prod-export-btn') {
+            menu.style.display = 'none';
+            document.removeEventListener('click', handler);
+          }
+        };
+        document.addEventListener('click', handler);
+      }, 0);
+    }
+  },
+
+  export(format) {
+    document.getElementById('prod-export-menu').style.display = 'none';
+    const catIds = this._getCatIds();
+    const params = new URLSearchParams({ format, token: API.token });
+    if (catIds) params.set('category_ids', catIds);
+    const url = `/api/products/export?${params}`;
+    if (format === 'pdf') {
+      window.open(url, '_blank');
+    } else {
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'produtos.xlsx';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    }
+  },
+
+  debouncedLoad(search, catIds, companyId) {
+    clearTimeout(this._searchTimer);
+    this._searchTimer = setTimeout(() => this.load(search, catIds, companyId), 280);
+  },
+
+  async load(search = '', catIds = '', companyId = '') {
     const el = document.getElementById('section-products');
     const isFirstLoad = !el.querySelector('.card');
     if (isFirstLoad) el.innerHTML = '<div class="empty-state">Carregando...</div>';
     try {
       const params = new URLSearchParams();
       if (search) params.set('search', search);
-      if (categoryId) params.set('category_id', categoryId);
+      if (catIds) params.set('category_ids', catIds);
       if (companyId) params.set('company_id', companyId);
 
       const [products, cats, companies] = await Promise.all([
@@ -78,22 +173,48 @@ const Products = {
               <span class="search-icon">🔍</span>
               <input type="text" class="form-control" id="prod-search" placeholder="Buscar produto..."
                 value="${escHtml(search)}"
-                oninput="Products.debouncedLoad(this.value, document.getElementById('prod-filter-cat').value, document.getElementById('prod-filter-company').value)">
+                oninput="Products.debouncedLoad(this.value, Products._getCatIds(), document.getElementById('prod-filter-company').value)">
             </div>
-            <select class="form-control" id="prod-filter-cat" style="max-width:200px"
-              onchange="Products.load(document.getElementById('prod-search').value, this.value, document.getElementById('prod-filter-company').value)">
-              <option value="">Todas as categorias</option>
-              ${this.categories.map(c =>
-                `<option value="${c.id}" ${String(c.id) === String(categoryId) ? 'selected' : ''}>${escHtml(c.name)}</option>`
-              ).join('')}
-            </select>
+            <div style="position:relative">
+              <button id="prod-cat-btn" class="form-control" onclick="Products.toggleCatDropdown()"
+                style="max-width:200px;text-align:left;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:8px">
+                <span id="prod-cat-label">${escHtml(this._catLabel(catIds))}</span>
+                <span style="font-size:10px;opacity:.6">▾</span>
+              </button>
+              <div id="prod-cat-dropdown" style="display:none;position:absolute;top:calc(100% + 4px);left:0;background:var(--card2);border:1px solid var(--border);border-radius:8px;padding:8px 4px;z-index:200;min-width:200px;box-shadow:0 8px 24px rgba(0,0,0,.5)">
+                <label style="display:flex;align-items:center;gap:8px;padding:6px 12px;cursor:pointer;font-size:13px;color:var(--gray)">
+                  <input type="checkbox" id="prod-cat-all" style="accent-color:var(--gold)"
+                    ${!catIds ? 'checked' : ''}
+                    onchange="Products._onCatAllChange(this)">
+                  Todas as categorias
+                </label>
+                <div style="border-top:1px solid var(--border);margin:4px 0"></div>
+                ${this.categories.map(c => `
+                  <label style="display:flex;align-items:center;gap:8px;padding:6px 12px;cursor:pointer;font-size:13px;color:var(--white)">
+                    <input type="checkbox" value="${c.id}" class="prod-cat-check" style="accent-color:var(--gold)"
+                      ${catIds && catIds.split(',').includes(String(c.id)) ? 'checked' : ''}
+                      onchange="Products._onCatChange()">
+                    ${escHtml(c.name)}
+                  </label>`).join('')}
+              </div>
+            </div>
             <select class="form-control" id="prod-filter-company" style="max-width:200px"
-              onchange="Products.load(document.getElementById('prod-search').value, document.getElementById('prod-filter-cat').value, this.value)">
+              onchange="Products.load(document.getElementById('prod-search').value, Products._getCatIds(), this.value)">
               <option value="">Todos os fornecedores</option>
               ${this.companies.map(c =>
                 `<option value="${c.id}" ${String(c.id) === String(companyId) ? 'selected' : ''}>${escHtml(c.name)}</option>`
               ).join('')}
             </select>
+            <div style="position:relative">
+              <button class="btn btn-outline btn-sm" onclick="Products.toggleExportMenu()" id="prod-export-btn"
+                style="white-space:nowrap">⬇ Baixar</button>
+              <div id="prod-export-menu" style="display:none;position:absolute;top:calc(100% + 4px);right:0;background:var(--card2);border:1px solid var(--border);border-radius:10px;padding:8px;z-index:200;min-width:160px;box-shadow:0 8px 24px rgba(0,0,0,.5)">
+                <button class="btn btn-outline btn-sm" style="width:100%;margin-bottom:6px;justify-content:flex-start;gap:8px"
+                  onclick="Products.export('pdf')">📄 PDF</button>
+                <button class="btn btn-outline btn-sm" style="width:100%;justify-content:flex-start;gap:8px"
+                  onclick="Products.export('xlsx')">📊 Excel (.xlsx)</button>
+              </div>
+            </div>
           </div>
           <div style="font-size:12px;color:var(--gray);padding:0 4px 10px">
             <strong style="color:var(--white)">${(products||[]).length}</strong> ${(products||[]).length === 1 ? 'produto encontrado' : 'produtos encontrados'}
