@@ -136,4 +136,142 @@ function generateOrderPDF(order) {
   }); // end Promise
 }
 
-module.exports = { generateOrderPDF };
+function generateCatalogPDF({ rows, churrascaria_name }) {
+  return new Promise((resolve, reject) => {
+    const doc = new PDFDocument({ margin: 0, size: 'A4' });
+    const chunks = [];
+    doc.on('data', chunk => chunks.push(chunk));
+    doc.on('end', () => resolve(Buffer.concat(chunks)));
+    doc.on('error', reject);
+
+    const W = doc.page.width;
+    const MARGIN = 40;
+    const CW = W - MARGIN * 2;
+
+    // Column x positions and widths
+    const COL = {
+      product:  { x: MARGIN,       w: 165 },
+      unit:     { x: MARGIN + 165, w: 25  },
+      company:  { x: MARGIN + 190, w: 140 },
+      price:    { x: MARGIN + 330, w: 65  },
+      bulkQty:  { x: MARGIN + 395, w: 58  },
+      bulkPrice:{ x: MARGIN + 453, w: CW - 453 },
+    };
+
+    const ROW_H = 18;
+    const CAT_H = 22;
+    const TH_H  = 20;
+
+    function drawHeader() {
+      doc.rect(0, 0, W, 110).fill(COLORS.dark);
+      doc.rect(0, 110, W, 4).fill(COLORS.orange);
+      doc.fillColor(COLORS.gold).fontSize(20).font('Helvetica-Bold')
+        .text(churrascaria_name.toUpperCase(), MARGIN, 22, { width: CW, align: 'center' });
+      doc.fillColor(COLORS.cream).fontSize(10).font('Helvetica')
+        .text('RELATÓRIO DE PREÇOS POR CATEGORIA', MARGIN, 52, { width: CW, align: 'center' });
+      doc.fillColor(COLORS.gray).fontSize(9)
+        .text(`Gerado em ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}`, MARGIN, 72, { width: CW, align: 'center' });
+    }
+
+    function drawTableHeader(y) {
+      doc.rect(MARGIN, y, CW, TH_H).fill(COLORS.dark);
+      doc.fillColor(COLORS.gold).fontSize(7.5).font('Helvetica-Bold')
+        .text('PRODUTO',        COL.product.x  + 6, y + 6, { width: COL.product.w  - 6 })
+        .text('UN',             COL.unit.x,          y + 6, { width: COL.unit.w })
+        .text('FORNECEDOR',     COL.company.x,        y + 6, { width: COL.company.w })
+        .text('PREÇO UNIT.',    COL.price.x,          y + 6, { width: COL.price.w })
+        .text('EMB. A PARTIR',  COL.bulkQty.x,        y + 6, { width: COL.bulkQty.w })
+        .text('PREÇO EMB.',     COL.bulkPrice.x,      y + 6, { width: COL.bulkPrice.w });
+      return y + TH_H;
+    }
+
+    function drawCategoryBar(y, name) {
+      doc.rect(MARGIN, y, CW, CAT_H).fill(COLORS.darkCard);
+      doc.fillColor(COLORS.gold).fontSize(9).font('Helvetica-Bold')
+        .text(name.toUpperCase(), MARGIN + 8, y + 7, { width: CW - 16 });
+      return y + CAT_H;
+    }
+
+    function checkPageBreak(y, neededH) {
+      if (y + neededH > doc.page.height - 50) {
+        doc.addPage({ margin: 0, size: 'A4' });
+        let ny = 40;
+        ny = drawTableHeader(ny);
+        return ny;
+      }
+      return y;
+    }
+
+    // Group rows: category -> product -> suppliers[]
+    const catMap = new Map();
+    for (const r of rows) {
+      if (!catMap.has(r.category_name)) catMap.set(r.category_name, new Map());
+      const prodMap = catMap.get(r.category_name);
+      if (!prodMap.has(r.product_id)) prodMap.set(r.product_id, { name: r.product_name, unit: r.unit, suppliers: [] });
+      prodMap.get(r.product_id).suppliers.push(r);
+    }
+
+    drawHeader();
+    let y = 128;
+    y = drawTableHeader(y);
+
+    let rowIdx = 0;
+    for (const [catName, prodMap] of catMap) {
+      y = checkPageBreak(y, CAT_H + ROW_H);
+      y = drawCategoryBar(y, catName);
+
+      for (const [, prod] of prodMap) {
+        const neededH = prod.suppliers.length * ROW_H;
+        y = checkPageBreak(y, neededH);
+
+        prod.suppliers.forEach((s, si) => {
+          const bg = rowIdx % 2 === 0 ? COLORS.white : COLORS.rowAlt;
+          doc.rect(MARGIN, y, CW, ROW_H).fill(bg);
+
+          doc.fillColor(COLORS.dark).fontSize(8).font(si === 0 ? 'Helvetica-Bold' : 'Helvetica');
+
+          if (si === 0) {
+            doc.text(prod.name, COL.product.x + 6, y + 5, { width: COL.product.w - 6, ellipsis: true });
+            doc.font('Helvetica')
+              .text(prod.unit || '-', COL.unit.x, y + 5, { width: COL.unit.w });
+          }
+
+          doc.font('Helvetica')
+            .text(s.company_name, COL.company.x, y + 5, { width: COL.company.w, ellipsis: true })
+            .text(fmt(s.price),   COL.price.x,   y + 5, { width: COL.price.w });
+
+          if (s.bulk_min_qty && s.bulk_price) {
+            doc.text(`${s.bulk_min_qty} ${prod.unit || 'un'}`, COL.bulkQty.x,  y + 5, { width: COL.bulkQty.w })
+               .text(fmt(s.bulk_price),                        COL.bulkPrice.x, y + 5, { width: COL.bulkPrice.w });
+          } else {
+            doc.fillColor(COLORS.gray)
+              .text('—', COL.bulkQty.x,  y + 5, { width: COL.bulkQty.w })
+              .text('—', COL.bulkPrice.x, y + 5, { width: COL.bulkPrice.w });
+          }
+
+          y += ROW_H;
+        });
+
+        rowIdx++;
+      }
+    }
+
+    if (rows.length === 0) {
+      doc.fillColor(COLORS.gray).fontSize(12).font('Helvetica')
+        .text('Nenhum produto encontrado com preço cadastrado.', MARGIN, y + 20, { width: CW, align: 'center' });
+    }
+
+    // Footer
+    const footerY = doc.page.height - 36;
+    doc.rect(0, footerY, W, 36).fill(COLORS.dark);
+    doc.fillColor(COLORS.gray).fontSize(7.5).font('Helvetica')
+      .text(
+        `Brasão Gaúcho · ${churrascaria_name} · Gerado em ${new Date().toLocaleString('pt-BR')}`,
+        MARGIN, footerY + 13, { width: CW, align: 'center' }
+      );
+
+    doc.end();
+  });
+}
+
+module.exports = { generateOrderPDF, generateCatalogPDF };

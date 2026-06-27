@@ -4,15 +4,17 @@
 const Reports = {
   _priceChart: null,
   _allProducts: [],
+  _allCategories: [],
   _phSearchTimer: null,
 
   async load() {
     const el = document.getElementById('section-reports');
     el.innerHTML = '<div class="empty-state">Carregando...</div>';
     try {
-      const [churrascarias, companies] = await Promise.all([
+      const [churrascarias, companies, categories] = await Promise.all([
         API.get('/reports/churrascarias'),
         API.get('/companies'),
+        API.get('/categories'),
       ]);
 
       el.innerHTML = `
@@ -66,6 +68,37 @@ const Reports = {
           </div>
         </div>`;
 
+      this._allCategories = categories;
+
+      el.innerHTML += `
+        <div class="card" style="margin-top:16px">
+          <div class="card-header"><span class="card-title">Relatório de Preços por Categoria</span></div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Churrascaria <span style="color:var(--orange)">*</span></label>
+              <select class="form-control" id="cat-rep-churr" style="max-width:280px">
+                <option value="">Selecione...</option>
+                ${churrascarias.map(c => `<option value="${c.id}">${escHtml(c.name)}</option>`).join('')}
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Categorias <span style="color:var(--gray);font-size:11px">(deixe em branco para todas)</span></label>
+            <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px">
+              ${categories.map(c => `
+                <label style="display:flex;align-items:center;gap:6px;cursor:pointer;background:var(--card2);border:1px solid var(--border);border-radius:8px;padding:6px 12px;font-size:13px">
+                  <input type="checkbox" value="${c.id}" class="cat-rep-check" style="accent-color:var(--gold)">
+                  ${escHtml(c.name)}
+                </label>`).join('')}
+            </div>
+          </div>
+          <div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap">
+            <button class="btn btn-primary btn-sm" onclick="Reports.runCatalog()">🔎 Visualizar</button>
+            <button class="btn btn-gold btn-sm" onclick="Reports.pdfCatalog()">📄 Gerar PDF</button>
+          </div>
+          <div id="cat-rep-result" style="margin-top:16px"></div>
+        </div>`;
+
       this.run();
       this._loadProducts();
     } catch (err) {
@@ -77,6 +110,65 @@ const Reports = {
     try {
       this._allProducts = await API.get('/products');
     } catch (_) {}
+  },
+
+  _catalogParams() {
+    const churrId = document.getElementById('cat-rep-churr')?.value;
+    if (!churrId) { toast('Selecione a churrascaria', 'error'); return null; }
+    const checked = [...document.querySelectorAll('.cat-rep-check:checked')].map(el => el.value);
+    const params = new URLSearchParams({ churrascaria_id: churrId });
+    if (checked.length) params.set('category_ids', checked.join(','));
+    return params;
+  },
+
+  async runCatalog() {
+    const params = this._catalogParams();
+    if (!params) return;
+    const el = document.getElementById('cat-rep-result');
+    el.innerHTML = '<div class="empty-state">Carregando...</div>';
+    try {
+      const rows = await API.get('/reports/products-by-category?' + params);
+      if (!rows.length) { el.innerHTML = '<div class="empty-state" style="padding:16px">Nenhum produto encontrado com preço cadastrado para os filtros selecionados.</div>'; return; }
+
+      // Group by category
+      const catMap = new Map();
+      rows.forEach(r => {
+        if (!catMap.has(r.category_name)) catMap.set(r.category_name, new Map());
+        const pm = catMap.get(r.category_name);
+        if (!pm.has(r.product_id)) pm.set(r.product_id, { name: r.product_name, unit: r.unit, suppliers: [] });
+        pm.get(r.product_id).suppliers.push(r);
+      });
+
+      let html = '<div class="table-wrap">';
+      for (const [catName, prodMap] of catMap) {
+        html += `<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--gold);padding:10px 0 5px;border-bottom:1px solid var(--border);margin-bottom:4px;margin-top:12px">${escHtml(catName)}</div>`;
+        html += `<table style="margin-bottom:0"><thead><tr>
+          <th>Produto</th><th>Un</th><th>Fornecedor</th><th>Preço Unit.</th><th>Emb. a partir</th><th>Preço Emb.</th>
+        </tr></thead><tbody>`;
+        for (const [, prod] of prodMap) {
+          prod.suppliers.forEach((s, si) => {
+            html += `<tr>
+              <td>${si === 0 ? `<strong>${escHtml(prod.name)}</strong>` : ''}</td>
+              <td>${si === 0 ? escHtml(prod.unit || 'un') : ''}</td>
+              <td>${escHtml(s.company_name)}</td>
+              <td class="text-gold">${fmtMoney(s.price)}</td>
+              <td style="color:var(--gray)">${s.bulk_min_qty ? `${s.bulk_min_qty} ${escHtml(prod.unit || 'un')}` : '—'}</td>
+              <td>${s.bulk_price ? `<span class="text-gold">${fmtMoney(s.bulk_price)}</span>` : '—'}</td>
+            </tr>`;
+          });
+        }
+        html += '</tbody></table>';
+      }
+      html += '</div>';
+      el.innerHTML = html;
+    } catch (err) { toast(err.message, 'error'); el.innerHTML = ''; }
+  },
+
+  pdfCatalog() {
+    const params = this._catalogParams();
+    if (!params) return;
+    params.set('token', API.token);
+    window.open(`/api/reports/products-by-category/pdf?${params}`, '_blank');
   },
 
   onPhSearch(val) {

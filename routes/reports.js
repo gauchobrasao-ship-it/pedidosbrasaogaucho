@@ -1,6 +1,7 @@
 const express = require('express');
 const { pool } = require('../database/db');
 const { authMiddleware, requirePermission, getAllowedChurrascarias } = require('../middleware/auth');
+const { generateCatalogPDF } = require('../utils/pdf');
 
 const router = express.Router();
 
@@ -166,6 +167,65 @@ router.get('/price-history', authMiddleware, requirePermission('view_reports'), 
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
+async function fetchCatalogRows(churrascaria_id, category_ids) {
+  const params = [Number(churrascaria_id)];
+  let catFilter = '';
+  if (category_ids && category_ids.length > 0) {
+    params.push(category_ids);
+    catFilter = `AND p.category_id = ANY($${params.length}::int[])`;
+  }
+  const { rows } = await pool.query(`
+    SELECT
+      COALESCE(cat.name, 'Sem Categoria') AS category_name,
+      p.id AS product_id, p.name AS product_name, p.unit, p.brand,
+      c.id AS company_id, c.name AS company_name,
+      cp.price, cp.bulk_min_qty, cp.bulk_price, cp.updated_at
+    FROM company_products cp
+    JOIN products p ON p.id = cp.product_id AND p.active = 1
+    LEFT JOIN categories cat ON cat.id = p.category_id
+    JOIN companies c ON c.id = cp.company_id AND c.active = 1
+    WHERE cp.churrascaria_id = $1
+      AND cp.active = 1
+      AND cp.price > 0
+      ${catFilter}
+    ORDER BY COALESCE(cat.name, 'Sem Categoria'), p.name, c.name
+  `, params);
+  return rows;
+}
+
+router.get('/products-by-category', authMiddleware, async (req, res) => {
+  const { churrascaria_id, category_ids } = req.query;
+  if (!churrascaria_id) return res.status(400).json({ error: 'churrascaria_id obrigatório' });
+  const catIds = category_ids ? category_ids.split(',').map(Number).filter(Boolean) : [];
+  try {
+    const rows = await fetchCatalogRows(churrascaria_id, catIds);
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
+router.get('/products-by-category/pdf', authMiddleware, async (req, res) => {
+  const { churrascaria_id, category_ids } = req.query;
+  if (!churrascaria_id) return res.status(400).json({ error: 'churrascaria_id obrigatório' });
+  const catIds = category_ids ? category_ids.split(',').map(Number).filter(Boolean) : [];
+  try {
+    const [rows, churrResult] = await Promise.all([
+      fetchCatalogRows(churrascaria_id, catIds),
+      pool.query('SELECT name FROM churrascarias WHERE id = $1', [Number(churrascaria_id)]),
+    ]);
+    const churrascaria_name = churrResult.rows[0]?.name || '';
+    const pdfBuffer = await generateCatalogPDF({ rows, churrascaria_name });
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'inline; filename=relatorio-precos.pdf');
+    res.send(pdfBuffer);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Erro ao gerar PDF' });
   }
 });
 
