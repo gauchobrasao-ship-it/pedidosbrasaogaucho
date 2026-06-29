@@ -300,21 +300,15 @@ const Estoque = {
       items.push({ product_id, quantity, notes });
     });
 
+    const btn = document.getElementById('est-save-btn');
+    if (btn) { btn.disabled = true; btn.textContent = 'Salvando...'; }
+
     try {
       await API.put(`/estoque/${id}/items`, { items });
-      this._dirty = false;
       toast('Contagem salva!');
-      // Atualiza o progresso sem sair da tela
-      const filled = items.filter(i => i.quantity !== null).length;
-      const pct = items.length > 0 ? Math.round((filled / items.length) * 100) : 0;
-      const pctColor = pct === 100 ? 'var(--success)' : pct > 0 ? 'var(--gold)' : 'var(--gray)';
-      const progEl = document.querySelector('.card .card-header [style*="text-align:right"]');
-      if (progEl) {
-        progEl.innerHTML = `
-          <div style="font-size:13px;color:${pctColor};font-weight:600">${filled}/${items.length} preenchidos</div>
-          <div style="font-size:11px;color:var(--gray)">${pct}% completo</div>`;
-      }
+      this.load();
     } catch (err) {
+      if (btn) { btn.disabled = false; btn.textContent = 'Salvar'; }
       toast(err.message, 'error');
     }
   },

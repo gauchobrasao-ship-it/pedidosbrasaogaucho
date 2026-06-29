@@ -99,10 +99,16 @@ router.post('/', async (req, res) => {
     );
     const listId = created[0].id;
 
-    for (const p of products) {
+    if (products.length) {
+      const valParts = [];
+      const params = [listId];
+      for (const p of products) {
+        valParts.push(`($1, $${params.length + 1})`);
+        params.push(p.id);
+      }
       await pool.query(
-        'INSERT INTO stock_list_items (stock_list_id, product_id) VALUES ($1, $2)',
-        [listId, p.id]
+        `INSERT INTO stock_list_items (stock_list_id, product_id) VALUES ${valParts.join(',')}`,
+        params
       );
     }
 
@@ -115,14 +121,21 @@ router.post('/', async (req, res) => {
 // Salva as quantidades dos itens
 router.put('/:id/items', async (req, res) => {
   const { items } = req.body;
+  if (!items || items.length === 0) return res.json({ ok: true });
   try {
+    const valParts = [];
+    const params = [req.params.id];
     for (const item of items) {
-      await pool.query(
-        `UPDATE stock_list_items SET quantity = $1, notes = $2
-         WHERE stock_list_id = $3 AND product_id = $4`,
-        [item.quantity ?? null, item.notes || null, req.params.id, item.product_id]
-      );
+      const base = params.length;
+      valParts.push(`($${base + 1}::int, $${base + 2}::numeric, $${base + 3}::text)`);
+      params.push(item.product_id, item.quantity ?? null, item.notes || null);
     }
+    await pool.query(`
+      UPDATE stock_list_items AS sli
+      SET quantity = v.qty, notes = v.note
+      FROM (VALUES ${valParts.join(',')}) AS v(pid, qty, note)
+      WHERE sli.stock_list_id = $1 AND sli.product_id = v.pid
+    `, params);
     await pool.query('UPDATE stock_lists SET updated_at = NOW() WHERE id = $1', [req.params.id]);
     res.json({ ok: true });
   } catch (err) {
