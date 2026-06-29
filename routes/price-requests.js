@@ -24,10 +24,12 @@ router.post('/', authMiddleware, async (req, res) => {
   } catch (_) {}
 
   try {
-    // Fetch the most recent inativo state per (company, product) from previous cotações
+    // Fetch the most recent state (inativo + prices) per (company, product) from previous cotações
     const productIds = items.map(i => i.product_id);
-    const { rows: prevInativoRows } = await pool.query(`
-      SELECT DISTINCT ON (pr.company_id, pri.product_id) pr.company_id, pri.product_id, pri.inativo
+    const { rows: prevRows } = await pool.query(`
+      SELECT DISTINCT ON (pr.company_id, pri.product_id)
+        pr.company_id, pri.product_id, pri.inativo,
+        pri.unit_price, pri.bulk_min_qty, pri.bulk_price
       FROM price_request_items pri
       JOIN price_requests pr ON pr.id = pri.request_id
       WHERE pr.company_id = ANY($1::int[]) AND pr.churrascaria_id = $2
@@ -37,10 +39,20 @@ router.post('/', authMiddleware, async (req, res) => {
 
     // Map: companyId -> Set<productId> that were inativo in their last cotação
     const inativoByCompany = {};
-    prevInativoRows.forEach(r => {
-      if (!r.inativo) return;
-      if (!inativoByCompany[r.company_id]) inativoByCompany[r.company_id] = new Set();
-      inativoByCompany[r.company_id].add(Number(r.product_id));
+    // Map: "companyId-productId" -> { unit_price, bulk_min_qty, bulk_price }
+    const prevPriceMap = {};
+    prevRows.forEach(r => {
+      if (r.inativo) {
+        if (!inativoByCompany[r.company_id]) inativoByCompany[r.company_id] = new Set();
+        inativoByCompany[r.company_id].add(Number(r.product_id));
+      }
+      if (r.unit_price > 0) {
+        prevPriceMap[`${r.company_id}-${r.product_id}`] = {
+          unit_price: r.unit_price,
+          bulk_min_qty: r.bulk_min_qty,
+          bulk_price: r.bulk_price,
+        };
+      }
     });
 
     const requests = await withTransaction(async (client) => {
@@ -57,11 +69,20 @@ router.post('/', authMiddleware, async (req, res) => {
         const valParts = [];
         const params = [requestId];
         for (const item of items) {
-          valParts.push(`($1,$${params.length+1},$${params.length+2},$${params.length+3})`);
-          params.push(item.product_id, item.quantity, compInativo.has(Number(item.product_id)));
+          const prev = prevPriceMap[`${companyId}-${item.product_id}`];
+          valParts.push(`($1,$${params.length+1},$${params.length+2},$${params.length+3},$${params.length+4},$${params.length+5},$${params.length+6})`);
+          params.push(
+            item.product_id,
+            item.quantity,
+            compInativo.has(Number(item.product_id)),
+            prev?.unit_price || null,
+            prev?.bulk_min_qty || null,
+            prev?.bulk_price || null,
+          );
         }
         await client.query(
-          `INSERT INTO price_request_items (request_id, product_id, quantity, inativo) VALUES ${valParts.join(',')}`,
+          `INSERT INTO price_request_items (request_id, product_id, quantity, inativo, prefilled_price, prefilled_bulk_min_qty, prefilled_bulk_price)
+           VALUES ${valParts.join(',')}`,
           params
         );
 
@@ -110,6 +131,7 @@ router.get('/:id/detail', authMiddleware, async (req, res) => {
       `, [req.params.id]),
       pool.query(`
         SELECT pri.product_id, pri.quantity, pri.unit_price, pri.bulk_min_qty, pri.bulk_price, pri.ruptura, pri.inativo, pri.edited_at,
+               pri.prefilled_price, pri.prefilled_bulk_min_qty, pri.prefilled_bulk_price,
                p.name as product_name, p.unit, p.brand, cat.name as category_name
         FROM price_request_items pri
         JOIN products p ON p.id = pri.product_id

@@ -16,6 +16,7 @@ const comparativeRoutes = require('./routes/comparative');
 const priceRequestsRoutes = require('./routes/price-requests');
 const perdasRoutes = require('./routes/perdas');
 const notificationsRoutes = require('./routes/notifications');
+const estoqueRoutes = require('./routes/estoque');
 
 const app = express();
 
@@ -35,6 +36,7 @@ app.use('/api/comparative', comparativeRoutes);
 app.use('/api/price-requests', priceRequestsRoutes);
 app.use('/api/perdas', perdasRoutes);
 app.use('/api/notifications', notificationsRoutes);
+app.use('/api/estoque', estoqueRoutes);
 
 app.get('/cotacao/:token', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'cotacao.html'));

@@ -275,8 +275,12 @@
     const rows = Object.entries(grouped).map(([cat,items]) => `
       <div class="cat-bar">${esc(cat)}</div>
       ${items.map(i => {
-        const prevUnit = i.unit_price > 0 ? String(Math.round(i.unit_price * 100)) : '';
-        const prevBulk = i.bulk_price > 0 ? String(Math.round(i.bulk_price * 100)) : '';
+        const displayUnit = i.unit_price > 0 ? i.unit_price : (i.prefilled_price > 0 ? i.prefilled_price : null);
+        const displayBulkQty = i.bulk_min_qty > 0 ? i.bulk_min_qty : (i.prefilled_bulk_min_qty > 0 ? i.prefilled_bulk_min_qty : null);
+        const displayBulk = i.bulk_price > 0 ? i.bulk_price : (i.prefilled_bulk_price > 0 ? i.prefilled_bulk_price : null);
+        const prevUnit = displayUnit ? String(Math.round(displayUnit * 100)) : '';
+        const prevBulk = displayBulk ? String(Math.round(displayBulk * 100)) : '';
+        const isPrefilled = !i.unit_price && i.prefilled_price > 0;
         return `
         <div class="prod-row" id="row-${i.product_id}">
           <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap">
@@ -284,6 +288,7 @@
               <div class="pn">${esc(i.product_name)}</div>
               ${i.brand ? `<div class="pm">🏷 ${esc(i.brand)}</div>` : ''}
               <div class="pq">Qtd solicitada: <strong>${i.quantity} ${esc(i.unit||'un')}</strong></div>
+              ${isPrefilled ? `<div style="font-size:11px;color:var(--gray);margin-top:2px">↩ preço da semana anterior</div>` : ''}
             </div>
             <div class="pg">
               <span class="pl">R$ unit.</span>
@@ -294,7 +299,7 @@
           <div class="bulk-row">
             <span class="bulk-label">Preço por volume: a partir de</span>
             <input type="number" step="1" min="1" inputmode="numeric" class="pi-sm" id="bq-${i.product_id}"
-              placeholder="qtd" value="${i.bulk_min_qty > 0 ? i.bulk_min_qty : ''}">
+              placeholder="qtd" value="${displayBulkQty || ''}">
             <span class="bulk-label">${esc(i.unit||'un')} por R$</span>
             <input type="text" inputmode="numeric" class="pi-sm" data-price="1" id="bp-${i.product_id}"
               placeholder="0,00" value="${prevBulk ? formatFromCents(prevBulk) : ''}">
@@ -341,13 +346,18 @@
      MOBILE
   ══════════════════════════════════════════ */
   function renderEditableCard(i) {
-    const prevUnit = i.unit_price > 0 ? String(Math.round(i.unit_price * 100)) : '';
-    const prevBulk = i.bulk_price > 0 ? String(Math.round(i.bulk_price * 100)) : '';
+    const displayUnit = i.unit_price > 0 ? i.unit_price : (i.prefilled_price > 0 ? i.prefilled_price : null);
+    const displayBulkQty = i.bulk_min_qty > 0 ? i.bulk_min_qty : (i.prefilled_bulk_min_qty > 0 ? i.prefilled_bulk_min_qty : null);
+    const displayBulk = i.bulk_price > 0 ? i.bulk_price : (i.prefilled_bulk_price > 0 ? i.prefilled_bulk_price : null);
+    const prevUnit = displayUnit ? String(Math.round(displayUnit * 100)) : '';
+    const prevBulk = displayBulk ? String(Math.round(displayBulk * 100)) : '';
+    const isPrefilled = !i.unit_price && i.prefilled_price > 0;
     let statusBadge = '';
-    if (i.inativo)       statusBadge = `<div class="m-inativo-badge">✗ Fora de portfólio</div>`;
-    else if (i.ruptura)  statusBadge = `<div class="m-ruptura-badge">⚠ Ruptura</div>`;
+    if (i.inativo)        statusBadge = `<div class="m-inativo-badge">✗ Fora de portfólio</div>`;
+    else if (i.ruptura)   statusBadge = `<div class="m-ruptura-badge">⚠ Ruptura</div>`;
     else if (i.edited_at) statusBadge = `<div class="m-edited-badge">✏ Editado</div>`;
     else if (i.unit_price > 0) statusBadge = `<div class="m-sent-badge">✓ Enviado</div>`;
+    else if (isPrefilled) statusBadge = `<div style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;color:var(--gray);margin-bottom:6px;text-transform:uppercase;letter-spacing:.6px">↩ Semana anterior</div>`;
     return `
     <div class="m-card">
       ${statusBadge}
@@ -369,7 +379,7 @@
         <div class="m-bulk-row">
           <span class="m-bulk-text">A partir de</span>
           <input type="number" step="1" min="0" inputmode="numeric" class="m-pi-bulk-qty"
-            id="bq-${i.product_id}" placeholder="0" value="${i.bulk_min_qty > 0 ? i.bulk_min_qty : ''}">
+            id="bq-${i.product_id}" placeholder="0" value="${displayBulkQty || ''}">
           <span class="m-bulk-text">${esc(i.unit||'un')} R$</span>
           <input type="text" inputmode="numeric" class="m-pi-bulk-price" data-price="1"
             id="bp-${i.product_id}" placeholder="0,00" value="${prevBulk ? formatFromCents(prevBulk) : ''}">
