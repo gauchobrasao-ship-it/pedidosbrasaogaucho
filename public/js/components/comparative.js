@@ -147,7 +147,7 @@ const Comparative = {
          </table>
        </div>
        <div style="font-size:12px;color:var(--gray);margin-top:8px">
-         Preencha a quantidade dos produtos que deseja comparar. Produtos com quantidade vazia serão ignorados.
+         Preencha a quantidade desejada. Campos vazios entram com quantidade 1.
        </div>`,
       `<button class="btn btn-outline" onclick="closeModal()">Cancelar</button>
        <button class="btn btn-primary" onclick="Comparative.confirmCategoryImport()">Adicionar à Cesta</button>`
@@ -180,8 +180,7 @@ const Comparative = {
     inputs.forEach(input => {
       const row = input.closest('tr');
       if (row && row.style.display === 'none') return; // filtered out
-      const qty = parseFloat(input.value || 0);
-      if (qty <= 0) return;
+      const qty = parseFloat(input.value) || 1;
       const productId = parseInt(input.dataset.id);
       if (this.state.items.some(i => i.product_id === productId)) {
         // Update existing
