@@ -152,7 +152,7 @@ router.get('/:id/detail', authMiddleware, async (req, res) => {
 router.get('/:token', async (req, res) => {
   try {
     const { rows } = await pool.query(`
-      SELECT pr.id, pr.title, pr.expires_at, pr.last_filled_at,
+      SELECT pr.id, pr.title, pr.expires_at, pr.last_filled_at, pr.vendor_notes,
              ch.name as churrascaria_name, c.name as company_name
       FROM price_requests pr
       JOIN churrascarias ch ON ch.id = pr.churrascaria_id

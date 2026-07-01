@@ -331,7 +331,7 @@
         <div class="notes-wrap">
           <div class="notes-title">Ofertas e Observações</div>
           <textarea class="notes-ta" id="vendor-notes"
-            placeholder="Ofereça produtos não listados, condições especiais, prazos de entrega ou qualquer observação relevante..."></textarea>
+            placeholder="Ofereça produtos não listados, condições especiais, prazos de entrega ou qualquer observação relevante...">${esc(d.vendor_notes||'')}</textarea>
           <div style="font-size:11px;color:var(--gray);margin-top:6px;line-height:1.5">Este campo é opcional. Use para sugerir novos produtos ou informar condições especiais.</div>
         </div>
         <button class="btn-sub" id="btn-sub" onclick="submitForm()">Enviar Preços</button>
@@ -426,7 +426,7 @@
         <div class="m-notes">
           <div class="m-notes-title">Ofertas e Observações</div>
           <textarea class="m-notes-ta" id="vendor-notes"
-            placeholder="Ofereça produtos não listados, condições especiais, prazos de entrega..."></textarea>
+            placeholder="Ofereça produtos não listados, condições especiais, prazos de entrega...">${esc(d.vendor_notes||'')}</textarea>
         </div>
         <button class="m-btn-sub" id="btn-sub" onclick="submitForm()">Enviar Preços</button>
         <p class="m-hint">Preencha apenas os produtos disponíveis.<br>Campos em branco serão ignorados.<br>Você pode enviar em partes e continuar depois.</p>
@@ -521,6 +521,7 @@
         if(item){ item.inativo = true; item.unit_price = null; item.ruptura = false; }
       });
       _data.last_filled_at = new Date().toISOString();
+      _data.vendor_notes = window._submitNotes || _data.vendor_notes || null;
       _rupturaSet.clear();
       _inativoSet.clear();
 
