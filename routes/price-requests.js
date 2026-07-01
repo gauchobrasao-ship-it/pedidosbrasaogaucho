@@ -206,9 +206,9 @@ router.post('/:token/submit', async (req, res) => {
     );
     const existingItemMap = new Map(existingItemsResult.rows.map(r => [String(r.product_id), r]));
 
-    // Pre-fetch old prices and company name in parallel
+    // Pre-fetch old prices, company name and all churrascarias in parallel
     const filledProductIds = filled.map(i => i.product_id);
-    const [existingPrices, companyResult] = await Promise.all([
+    const [existingPrices, companyResult, churrascariasResult] = await Promise.all([
       filledProductIds.length > 0
         ? pool.query(`
             SELECT cp.product_id, cp.price AS old_price, p.name AS product_name
@@ -219,7 +219,9 @@ router.post('/:token/submit', async (req, res) => {
           `, [request.churrascaria_id, request.company_id, filledProductIds])
         : Promise.resolve({ rows: [] }),
       pool.query('SELECT name FROM companies WHERE id = $1', [request.company_id]),
+      pool.query('SELECT id FROM churrascarias'),
     ]);
+    const allChurrascarias = churrascariasResult.rows.map(r => r.id);
     const priceMap = new Map(existingPrices.rows.map(r => [r.product_id, r]));
     const companyName = companyResult.rows[0]?.name || 'fornecedor';
 
@@ -263,12 +265,15 @@ router.post('/:token/submit', async (req, res) => {
           ]);
         }
 
-        ops.push(client.query(`
-          INSERT INTO company_products (churrascaria_id, company_id, product_id, price, bulk_min_qty, bulk_price, active)
-          VALUES ($1,$2,$3,$4,$5,$6,1)
-          ON CONFLICT (churrascaria_id, company_id, product_id)
-          DO UPDATE SET price=EXCLUDED.price, bulk_min_qty=EXCLUDED.bulk_min_qty, bulk_price=EXCLUDED.bulk_price, updated_at=NOW()
-        `, [request.churrascaria_id, request.company_id, item.product_id, price, bulkQty, bulkPrice]));
+        // Salvar preço para todas as churrascarias (sem distinção de preço por unidade)
+        for (const churrId of allChurrascarias) {
+          ops.push(client.query(`
+            INSERT INTO company_products (churrascaria_id, company_id, product_id, price, bulk_min_qty, bulk_price, active)
+            VALUES ($1,$2,$3,$4,$5,$6,1)
+            ON CONFLICT (churrascaria_id, company_id, product_id)
+            DO UPDATE SET price=EXCLUDED.price, bulk_min_qty=EXCLUDED.bulk_min_qty, bulk_price=EXCLUDED.bulk_price, updated_at=NOW()
+          `, [churrId, request.company_id, item.product_id, price, bulkQty, bulkPrice]));
+        }
 
         const existingItem = existingItemMap.get(String(item.product_id));
         const isEdit = existingItem && existingItem.unit_price !== null;
