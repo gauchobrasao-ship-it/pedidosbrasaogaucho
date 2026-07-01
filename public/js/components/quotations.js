@@ -84,7 +84,9 @@ const Quotations = {
                   <td>${escHtml(r.title || '—')}</td>
                   <td>${escHtml(r.churrascaria_name)}</td>
                   <td>${escHtml(r.company_name)}</td>
-                  <td style="text-align:center">${total}</td>
+                  <td style="text-align:center;font-size:13px">
+                    <span style="color:${filled >= total && total > 0 ? 'var(--success)' : filled > 0 ? 'var(--gold)' : 'var(--gray)'};font-weight:600">${filled}</span><span style="color:var(--gray)">/${total}</span>
+                  </td>
                   <td>${status}</td>
                   <td style="font-size:12px;white-space:nowrap">${fmtDate(r.expires_at)}</td>
                   <td style="white-space:nowrap">
