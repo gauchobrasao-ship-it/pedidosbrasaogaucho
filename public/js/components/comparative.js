@@ -269,7 +269,7 @@ const Comparative = {
       <div class="card">
         <div class="card-header">
           <span class="card-title">Resultado da Comparação</span>
-          ${cheapestId ? `<span class="badge" style="background:#43A04722;color:#43A047;border-color:#43A04744">✓ Menor custo: ${escHtml(companies.find(c=>c.id===cheapestId)?.name||'')}</span>` : ''}
+          ${cheapestId ? `<span class="badge" style="background:#43A04722;color:#43A047;border-color:#43A04744">✓ Menor custo total: ${escHtml(companies.find(c=>c.id===cheapestId)?.name||'')}</span>` : ''}
         </div>
         <div class="table-wrap">
           <table class="cmp-table">
@@ -281,22 +281,27 @@ const Comparative = {
               </tr>
             </thead>
             <tbody>
-              ${products.map(p => `<tr>
-                <td>
-                  <div style="font-weight:600">${escHtml(p.name)}</div>
-                  <div style="font-size:11px;color:var(--gray)">${escHtml(p.unit||'un')}</div>
-                </td>
-                <td style="text-align:center">${p.quantity}</td>
-                ${companies.map(c => {
-                  const price = c.prices[p.id];
-                  const sub = (price > 0) ? price * p.quantity : null;
-                  return `<td class="${c.id===cheapestId?'cmp-best':''}">
-                    ${sub !== null
-                      ? `<div class="cmp-unit-price">${fmtMoney(price)}/un</div><div class="cmp-subtotal">${fmtMoney(sub)}</div>`
-                      : `<span style="color:var(--gray);font-size:13px">—</span>`}
-                  </td>`;
-                }).join('')}
-              </tr>`).join('')}
+              ${products.map(p => {
+                const validPrices = companies.map(c => c.prices[p.id]).filter(pr => pr > 0);
+                const minPrice = validPrices.length ? Math.min(...validPrices) : null;
+                return `<tr>
+                  <td>
+                    <div style="font-weight:600">${escHtml(p.name)}</div>
+                    <div style="font-size:11px;color:var(--gray)">${escHtml(p.unit||'un')}</div>
+                  </td>
+                  <td style="text-align:center">${p.quantity}</td>
+                  ${companies.map(c => {
+                    const price = c.prices[p.id];
+                    const sub = (price > 0) ? price * p.quantity : null;
+                    const isBest = minPrice !== null && price === minPrice;
+                    return `<td class="${isBest ? 'cmp-best' : ''}">
+                      ${sub !== null
+                        ? `<div class="cmp-unit-price">${fmtMoney(price)}/un</div><div class="cmp-subtotal">${fmtMoney(sub)}</div>`
+                        : `<span style="color:var(--gray);font-size:13px">—</span>`}
+                    </td>`;
+                  }).join('')}
+                </tr>`;
+              }).join('')}
             </tbody>
             <tfoot>
               <tr>
@@ -310,16 +315,178 @@ const Comparative = {
           </table>
         </div>
         <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">
+          <div style="margin-bottom:14px">
+            <button class="btn btn-gold" onclick="Comparative.openShoppingList()">🛒 Lista de Compras</button>
+          </div>
           <div style="font-size:12px;color:var(--gray);margin-bottom:10px">Gerar pedido com os produtos desta cesta:</div>
           <div class="flex flex-gap" style="flex-wrap:wrap">
             ${companies.map(c => `
               <button class="btn ${c.id===cheapestId?'btn-primary':'btn-outline'} btn-sm"
                 onclick="Comparative.makeOrder(${c.id})">
-                🛒 Pedir com ${escHtml(c.name)}
+                📋 Pedir com ${escHtml(c.name)}
               </button>`).join('')}
           </div>
         </div>
       </div>`;
+  },
+
+  _buildShoppingListData() {
+    const { products, companies } = this.state.lastResult;
+    const assignments = {};
+    const noCotacao = [];
+
+    products.forEach(p => {
+      let bestCompany = null;
+      let bestPrice = Infinity;
+      companies.forEach(c => {
+        const price = c.prices[p.id];
+        if (price > 0 && price < bestPrice) {
+          bestPrice = price;
+          bestCompany = c;
+        }
+      });
+      if (!bestCompany) {
+        noCotacao.push(p);
+      } else {
+        if (!assignments[bestCompany.id]) {
+          assignments[bestCompany.id] = { company: bestCompany, items: [], subtotal: 0 };
+        }
+        const subtotal = bestPrice * p.quantity;
+        assignments[bestCompany.id].items.push({ name: p.name, unit: p.unit || 'un', qty: p.quantity, price: bestPrice, subtotal });
+        assignments[bestCompany.id].subtotal += subtotal;
+      }
+    });
+
+    const grandTotal = Object.values(assignments).reduce((s, a) => s + a.subtotal, 0);
+    return { assignments: Object.values(assignments), noCotacao, grandTotal };
+  },
+
+  openShoppingList() {
+    const { assignments, noCotacao, grandTotal } = this._buildShoppingListData();
+    this._lastShoppingList = { assignments, noCotacao, grandTotal };
+
+    const suppliersHtml = assignments.map(a => `
+      <div style="margin-bottom:20px">
+        <div style="font-weight:700;font-size:14px;color:var(--gold);border-bottom:1px solid var(--border);padding-bottom:6px;margin-bottom:8px">
+          ${escHtml(a.company.name)}
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Produto</th><th>UN</th><th style="text-align:center">Qtd</th><th style="text-align:right">Unit.</th><th style="text-align:right">Subtotal</th></tr></thead>
+            <tbody>
+              ${a.items.map(i => `<tr>
+                <td style="font-weight:600">${escHtml(i.name)}</td>
+                <td><span class="badge badge-gray">${escHtml(i.unit)}</span></td>
+                <td style="text-align:center">${i.qty}</td>
+                <td style="text-align:right">${fmtMoney(i.price)}</td>
+                <td style="text-align:right;font-weight:600;color:var(--success)">${fmtMoney(i.subtotal)}</td>
+              </tr>`).join('')}
+            </tbody>
+            <tfoot>
+              <tr>
+                <td colspan="4" style="text-align:right;font-weight:700;font-size:13px">Subtotal ${escHtml(a.company.name)}:</td>
+                <td style="text-align:right;font-weight:700;color:var(--gold)">${fmtMoney(a.subtotal)}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>`).join('');
+
+    const noCotacaoHtml = noCotacao.length ? `
+      <div style="margin-top:8px;background:#E5393514;border:1px solid #E5393540;border-radius:8px;padding:14px 16px">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#E53935;margin-bottom:10px">
+          ⚠ Sem Cotação — ${noCotacao.length} produto(s)
+        </div>
+        <ul style="margin:0;padding-left:18px;font-size:13px;color:var(--gray);line-height:1.9">
+          ${noCotacao.map(p => `<li>${escHtml(p.name)} · ${p.quantity} ${escHtml(p.unit||'un')}</li>`).join('')}
+        </ul>
+      </div>` : '';
+
+    const totalHtml = `
+      <div style="margin-top:16px;padding-top:12px;border-top:2px solid var(--border);text-align:right;font-size:15px;font-weight:700">
+        Total Geral: <span style="color:var(--gold)">${fmtMoney(grandTotal)}</span>
+      </div>`;
+
+    showModal(
+      '🛒 Lista de Compras',
+      suppliersHtml + noCotacaoHtml + totalHtml,
+      `<button class="btn btn-outline" onclick="closeModal()">Fechar</button>
+       <button class="btn btn-gold" onclick="Comparative.printShoppingList()">🖨 Imprimir PDF</button>`
+    );
+  },
+
+  printShoppingList() {
+    const { assignments, noCotacao, grandTotal } = this._lastShoppingList;
+    const date = new Date().toLocaleString('pt-BR');
+    const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    const money = v => 'R$ ' + Number(v||0).toFixed(2).replace('.', ',');
+
+    const suppliersHtml = assignments.map(a => `
+      <div class="supplier">
+        <div class="supplier-name">${esc(a.company.name)}</div>
+        <table>
+          <thead><tr><th>Produto</th><th>UN</th><th>Qtd</th><th>Unit.</th><th>Subtotal</th></tr></thead>
+          <tbody>
+            ${a.items.map(i => `<tr>
+              <td>${esc(i.name)}</td>
+              <td>${esc(i.unit)}</td>
+              <td style="text-align:center">${i.qty}</td>
+              <td style="text-align:right">${money(i.price)}</td>
+              <td style="text-align:right;font-weight:600">${money(i.subtotal)}</td>
+            </tr>`).join('')}
+          </tbody>
+          <tfoot>
+            <tr>
+              <td colspan="4" style="text-align:right">Subtotal ${esc(a.company.name)}</td>
+              <td style="text-align:right;font-weight:700">${money(a.subtotal)}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>`).join('');
+
+    const noCotacaoHtml = noCotacao.length ? `
+      <div class="no-price">
+        <div class="no-price-title">⚠ Sem Cotação — ${noCotacao.length} produto(s)</div>
+        <ul>${noCotacao.map(p => `<li>${esc(p.name)} · ${p.quantity} ${esc(p.unit||'un')}</li>`).join('')}</ul>
+      </div>` : '';
+
+    const html = `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Lista de Compras — Brasão Gaúcho</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:Arial,sans-serif;font-size:13px;color:#000;padding:20px}
+    h1{font-size:18px;margin-bottom:3px}
+    .date{font-size:11px;color:#666;margin-bottom:22px}
+    .supplier{margin-bottom:24px;page-break-inside:avoid}
+    .supplier-name{font-size:14px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;border-bottom:2px solid #000;padding-bottom:5px;margin-bottom:8px}
+    table{width:100%;border-collapse:collapse}
+    th,td{padding:5px 8px;border:1px solid #ccc;text-align:left;font-size:12px}
+    th{background:#f4f4f4;font-weight:700;text-transform:uppercase;font-size:10px;letter-spacing:.4px}
+    tfoot td{background:#f9f9f9;font-weight:700}
+    .no-price{margin-top:20px;padding:12px 14px;border:1px solid #c00;border-radius:4px;page-break-inside:avoid}
+    .no-price-title{font-weight:700;color:#c00;margin-bottom:8px;font-size:13px}
+    .no-price ul{padding-left:18px}
+    .no-price li{padding:2px 0}
+    .grand-total{margin-top:20px;padding-top:10px;border-top:2px solid #000;text-align:right;font-size:15px;font-weight:700}
+    @media print{@page{margin:15mm}body{padding:0}}
+  </style>
+</head>
+<body>
+  <h1>Lista de Compras — Brasão Gaúcho</h1>
+  <div class="date">Gerada em ${date}</div>
+  ${suppliersHtml}
+  ${noCotacaoHtml}
+  <div class="grand-total">TOTAL GERAL: ${money(grandTotal)}</div>
+  <script>window.onload=function(){window.print()}<\/script>
+</body>
+</html>`;
+
+    const win = window.open('', '_blank', 'width=820,height=680');
+    win.document.write(html);
+    win.document.close();
   },
 
   async openSendModal() {
