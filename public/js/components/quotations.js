@@ -54,7 +54,7 @@ const Quotations = {
              </div>`
           : `<div class="table-wrap"><table>
               <thead><tr>
-                <th>Nº</th><th>Título</th><th>Churrascaria</th><th>Fornecedor</th><th>Itens</th><th>Status</th><th>Validade</th><th>Ações</th>
+                <th>Nº</th><th>Título</th><th>Churrascaria</th><th>Fornecedor</th><th>Contato</th><th>Itens</th><th>Status</th><th>Validade</th><th>Ações</th>
               </tr></thead>
               <tbody>${requests.map(r => {
                 const expired = new Date(r.expires_at) < now;
@@ -84,6 +84,7 @@ const Quotations = {
                   <td>${escHtml(r.title || '—')}</td>
                   <td>${escHtml(r.churrascaria_name)}</td>
                   <td>${escHtml(r.company_name)}</td>
+                  <td style="font-size:13px;color:var(--gray)">${escHtml(r.contact_name || '—')}</td>
                   <td style="text-align:center;font-size:13px">
                     <span style="color:${filled >= total && total > 0 ? 'var(--success)' : filled > 0 ? 'var(--gold)' : 'var(--gray)'};font-weight:600">${filled}</span><span style="color:var(--gray)">/${total}</span>
                   </td>

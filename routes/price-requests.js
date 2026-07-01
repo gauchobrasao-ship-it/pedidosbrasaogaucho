@@ -100,14 +100,14 @@ router.get('/', authMiddleware, async (req, res) => {
   try {
     const { rows } = await pool.query(`
       SELECT pr.id, pr.token, pr.title, pr.expires_at, pr.last_filled_at, pr.created_at,
-             ch.name as churrascaria_name, c.name as company_name,
+             ch.name as churrascaria_name, c.name as company_name, c.contact_name,
              COUNT(pri.id)::int as item_count,
              COUNT(CASE WHEN pri.unit_price IS NOT NULL OR pri.ruptura OR pri.inativo THEN 1 END)::int as filled_count
       FROM price_requests pr
       JOIN churrascarias ch ON ch.id = pr.churrascaria_id
       JOIN companies c ON c.id = pr.company_id
       LEFT JOIN price_request_items pri ON pri.request_id = pr.id
-      GROUP BY pr.id, ch.name, c.name
+      GROUP BY pr.id, ch.name, c.name, c.contact_name
       ORDER BY pr.created_at DESC
       LIMIT 100
     `);
