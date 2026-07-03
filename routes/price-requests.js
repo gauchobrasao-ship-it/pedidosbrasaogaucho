@@ -6,10 +6,13 @@ const { authMiddleware } = require('../middleware/auth');
 const router = express.Router();
 
 router.post('/', authMiddleware, async (req, res) => {
-  const { churrascaria_id, company_ids, title, expires_in_days, items } = req.body;
+  const { churrascaria_id, company_ids, title, expires_in_days, items, target_churrascaria_ids } = req.body;
   if (!churrascaria_id || !company_ids?.length || !items?.length) {
     return res.status(400).json({ error: 'Dados incompletos' });
   }
+  const targetChurrascariaIds = (Array.isArray(target_churrascaria_ids) && target_churrascaria_ids.length)
+    ? target_churrascaria_ids.map(Number)
+    : [Number(churrascaria_id)];
   const expiresAt = new Date();
   expiresAt.setDate(expiresAt.getDate() + (parseInt(expires_in_days) || 7));
   const baseUrl = `${req.protocol}://${req.get('host')}`;
@@ -59,9 +62,9 @@ router.post('/', authMiddleware, async (req, res) => {
       return Promise.all(company_ids.map(async (companyId) => {
         const token = crypto.randomBytes(16).toString('hex');
         const { rows } = await client.query(
-          `INSERT INTO price_requests (token, churrascaria_id, company_id, title, created_by, expires_at)
-           VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`,
-          [token, churrascaria_id, companyId, title || null, req.user.id, expiresAt.toISOString()]
+          `INSERT INTO price_requests (token, churrascaria_id, company_id, title, created_by, expires_at, target_churrascaria_ids)
+           VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
+          [token, churrascaria_id, companyId, title || null, req.user.id, expiresAt.toISOString(), targetChurrascariaIds]
         );
         const requestId = rows[0].id;
         const compInativo = inativoByCompany[companyId] || new Set();
@@ -101,6 +104,7 @@ router.get('/', authMiddleware, async (req, res) => {
     const { rows } = await pool.query(`
       SELECT pr.id, pr.token, pr.title, pr.expires_at, pr.last_filled_at, pr.created_at,
              ch.name as churrascaria_name, c.name as company_name, c.contact_name,
+             COALESCE(pr.target_churrascaria_ids, ARRAY[pr.churrascaria_id]) as target_churrascaria_ids,
              COUNT(pri.id)::int as item_count,
              COUNT(CASE WHEN pri.unit_price IS NOT NULL OR pri.ruptura OR pri.inativo THEN 1 END)::int as filled_count
       FROM price_requests pr
@@ -206,9 +210,9 @@ router.post('/:token/submit', async (req, res) => {
     );
     const existingItemMap = new Map(existingItemsResult.rows.map(r => [String(r.product_id), r]));
 
-    // Pre-fetch old prices, company name and all churrascarias in parallel
+    // Pre-fetch old prices and company name in parallel
     const filledProductIds = filled.map(i => i.product_id);
-    const [existingPrices, companyResult, churrascariasResult] = await Promise.all([
+    const [existingPrices, companyResult] = await Promise.all([
       filledProductIds.length > 0
         ? pool.query(`
             SELECT cp.product_id, cp.price AS old_price, p.name AS product_name
@@ -219,9 +223,13 @@ router.post('/:token/submit', async (req, res) => {
           `, [request.churrascaria_id, request.company_id, filledProductIds])
         : Promise.resolve({ rows: [] }),
       pool.query('SELECT name FROM companies WHERE id = $1', [request.company_id]),
-      pool.query('SELECT id FROM churrascarias'),
     ]);
-    const allChurrascarias = churrascariasResult.rows.map(r => r.id);
+    // Churrascarias que devem ser atualizadas com este preenchimento: as escolhidas
+    // ao gerar o link (target_churrascaria_ids). Cotações antigas (sem essa coluna
+    // preenchida) caem de volta para a churrascaria única do pedido.
+    const allChurrascarias = (request.target_churrascaria_ids && request.target_churrascaria_ids.length)
+      ? request.target_churrascaria_ids
+      : [request.churrascaria_id];
     const priceMap = new Map(existingPrices.rows.map(r => [r.product_id, r]));
     const companyName = companyResult.rows[0]?.name || 'fornecedor';
 

@@ -524,6 +524,17 @@ const Comparative = {
              </label>`).join('')}
          </div>
        </div>
+       <div class="form-group">
+         <label class="form-label">Atualizar preços em quais churrascarias?</label>
+         <div class="perm-grid">
+           ${this.state.churrs.map(ch => `
+             <label class="perm-item">
+               <input type="checkbox" class="sq-churr-cb" value="${ch.id}" ${String(ch.id) === String(churrId) ? 'checked' : ''}>
+               <span class="perm-label">🔥 ${escHtml(ch.name)}</span>
+             </label>`).join('')}
+         </div>
+         <div style="font-size:11px;color:var(--gray);margin-top:6px">Se marcar as duas, o preço que o fornecedor informar vale para as duas. Se marcar só uma, atualiza só ela.</div>
+       </div>
        <div style="font-size:12px;color:var(--gray)">Um link único será gerado por fornecedor. Eles preenchem os preços sem precisar de login.</div>`,
       `<button class="btn btn-outline" onclick="closeModal()">Cancelar</button>
        <button class="btn btn-primary" onclick="Comparative.generateLinks(${churrId})">Gerar Links</button>`
@@ -533,6 +544,8 @@ const Comparative = {
   async generateLinks(churrId) {
     const companyIds = Array.from(document.querySelectorAll('.sq-comp-cb:checked')).map(cb => parseInt(cb.value));
     if (!companyIds.length) { toast('Selecione ao menos um fornecedor', 'error'); return; }
+    const targetChurrascariaIds = Array.from(document.querySelectorAll('.sq-churr-cb:checked')).map(cb => parseInt(cb.value));
+    if (!targetChurrascariaIds.length) { toast('Selecione ao menos uma churrascaria para atualizar', 'error'); return; }
     const title = document.getElementById('sq-title').value.trim();
     const expiresInDays = parseInt(document.getElementById('sq-expires').value);
     try {
@@ -541,7 +554,8 @@ const Comparative = {
         company_ids: companyIds,
         title,
         expires_in_days: expiresInDays,
-        items: this.state.items.map(i => ({ product_id: i.product_id, quantity: i.quantity }))
+        items: this.state.items.map(i => ({ product_id: i.product_id, quantity: i.quantity })),
+        target_churrascaria_ids: targetChurrascariaIds
       });
       this._links = result.requests;
       showModal(
@@ -591,10 +605,14 @@ const Comparative = {
                   : expired
                   ? `<span class="badge badge-gray">Expirada</span>`
                   : `<span class="badge" style="background:#E0782020;color:var(--orange);border-color:#E0782050">Aguardando</span>`;
+                const targetNames = (r.target_churrascaria_ids || []).map(id =>
+                  this.state.churrs?.find(ch => String(ch.id) === String(id))?.name
+                ).filter(Boolean);
+                const churrLabel = targetNames.length ? targetNames.join(' + ') : r.churrascaria_name;
                 return `<tr>
                   <td>
                     <div style="font-weight:600">${escHtml(r.company_name)}</div>
-                    <div style="font-size:11px;color:var(--gray)">${escHtml(r.churrascaria_name)}${r.title ? ' · ' + escHtml(r.title) : ''}</div>
+                    <div style="font-size:11px;color:var(--gray)">🔥 ${escHtml(churrLabel)}${r.title ? ' · ' + escHtml(r.title) : ''}</div>
                     ${filled ? `<div style="font-size:11px;color:#64B5F6;margin-top:2px">Preenchida em ${new Date(r.last_filled_at).toLocaleDateString('pt-BR')}</div>` : ''}
                   </td>
                   <td style="text-align:center">${r.item_count}</td>
