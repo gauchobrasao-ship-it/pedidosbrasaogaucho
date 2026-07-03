@@ -204,36 +204,61 @@ const Orders = {
     // Group by category
     const grouped = {};
     products.forEach(p => {
-      const cat = p.category_name || 'Sem categoria';
-      if (!grouped[cat]) grouped[cat] = [];
-      grouped[cat].push(p);
+      const catId = p.category_id != null ? String(p.category_id) : 'none';
+      if (!grouped[catId]) grouped[catId] = { name: p.category_name || 'Sem categoria', prods: [] };
+      grouped[catId].prods.push(p);
     });
+    const cats = Object.entries(grouped).map(([id, g]) => ({ id, name: g.name }));
 
-    const rows = Object.entries(grouped).map(([cat, prods]) => `
-      <div class="category-divider">${escHtml(cat)}</div>
-      ${prods.map(p => `
-        <div class="product-order-row">
-          <div>
-            <div class="product-order-name">${escHtml(p.name)}</div>
-            ${p.bulk_min_qty && p.bulk_price
-              ? `<div style="font-size:11px;color:var(--gold);margin-top:3px">
-                   🏷 A partir de ${p.bulk_min_qty} ${escHtml(p.unit||'un')}: ${fmtMoney(p.bulk_price)}
-                 </div>`
-              : ''}
-            <div id="bulk-badge-${p.id}" style="display:none;font-size:11px;color:var(--success);margin-top:2px">✓ Desconto por volume aplicado</div>
-          </div>
-          <div class="product-order-unit">${escHtml(p.unit || 'un')}</div>
-          <div class="product-order-price">
-            <input type="number" step="0.01" min="0" class="form-control" style="width:100px"
-              id="price-${p.id}" value="${parseFloat(p.price||0).toFixed(2)}"
-              placeholder="Preço" onchange="Orders.calcTotal()">
-          </div>
-          <div class="product-order-qty">
-            <input type="number" step="0.001" min="0" class="form-control"
-              id="qty-${p.id}" placeholder="Qtd" oninput="Orders._checkBulk(${p.id})">
-          </div>
-        </div>`).join('')}
-    `).join('');
+    const rows = Object.entries(grouped).map(([catId, g]) => `
+      <div class="order-cat-group" data-cat-id="${catId}">
+        <div class="category-divider">${escHtml(g.name)}</div>
+        ${g.prods.map(p => `
+          <div class="product-order-row">
+            <div>
+              <div class="product-order-name">${escHtml(p.name)}</div>
+              ${p.bulk_min_qty && p.bulk_price
+                ? `<div style="font-size:11px;color:var(--gold);margin-top:3px">
+                     🏷 A partir de ${p.bulk_min_qty} ${escHtml(p.unit||'un')}: ${fmtMoney(p.bulk_price)}
+                   </div>`
+                : ''}
+              <div id="bulk-badge-${p.id}" style="display:none;font-size:11px;color:var(--success);margin-top:2px">✓ Desconto por volume aplicado</div>
+            </div>
+            <div class="product-order-unit">${escHtml(p.unit || 'un')}</div>
+            <div class="product-order-price">
+              <input type="number" step="0.01" min="0" class="form-control" style="width:100px"
+                id="price-${p.id}" value="${parseFloat(p.price||0).toFixed(2)}"
+                placeholder="Preço" onchange="Orders.calcTotal()">
+            </div>
+            <div class="product-order-qty">
+              <input type="number" step="0.001" min="0" class="form-control"
+                id="qty-${p.id}" placeholder="Qtd" oninput="Orders._checkBulk(${p.id})">
+            </div>
+          </div>`).join('')}
+      </div>`).join('');
+
+    const catFilterHtml = cats.length > 1 ? `
+      <div style="position:relative;margin-bottom:14px">
+        <button id="no-cat-btn" class="form-control" onclick="Orders.toggleOrderCatDropdown()"
+          style="max-width:260px;text-align:left;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:8px">
+          <span id="no-cat-label">Todas as categorias</span>
+          <span style="font-size:10px;opacity:.6">▾</span>
+        </button>
+        <div id="no-cat-dropdown" style="display:none;position:absolute;top:calc(100% + 4px);left:0;background:var(--card2);border:1px solid var(--border);border-radius:8px;padding:8px 4px;z-index:200;min-width:240px;box-shadow:0 8px 24px rgba(0,0,0,.5)">
+          <label style="display:flex;align-items:center;gap:8px;padding:6px 12px;cursor:pointer;font-size:13px;color:var(--gray)">
+            <input type="checkbox" id="no-cat-all" checked style="accent-color:var(--gold)"
+              onchange="Orders._onOrderCatAllChange(this)">
+            Todas as categorias
+          </label>
+          <div style="border-top:1px solid var(--border);margin:4px 0"></div>
+          ${cats.map(cat => `
+            <label style="display:flex;align-items:center;gap:8px;padding:6px 12px;cursor:pointer;font-size:13px;color:var(--white)">
+              <input type="checkbox" value="${cat.id}" data-name="${escHtml(cat.name)}" class="no-cat-check" style="accent-color:var(--gold)"
+                onchange="Orders._onOrderCatChange()">
+              ${escHtml(cat.name)}
+            </label>`).join('')}
+        </div>
+      </div>` : '';
 
     el.innerHTML = `
       <div style="max-width:800px">
@@ -257,6 +282,7 @@ const Orders = {
               <div class="text-gold" style="font-size:20px;font-weight:800" id="no-total">R$ 0,00</div>
             </div>
           </div>
+          ${catFilterHtml}
           <div id="no-products">${rows}</div>
           <hr class="divider">
           <div class="form-group">
@@ -278,6 +304,53 @@ const Orders = {
       if (obsEl && this.state.observations) obsEl.value = this.state.observations;
       this.calcTotal();
     }
+  },
+
+  toggleOrderCatDropdown() {
+    const dd = document.getElementById('no-cat-dropdown');
+    if (!dd) return;
+    const isOpen = dd.style.display !== 'none';
+    dd.style.display = isOpen ? 'none' : 'block';
+    if (!isOpen) {
+      setTimeout(() => {
+        const handler = (e) => {
+          if (!dd.contains(e.target) && e.target.id !== 'no-cat-btn') {
+            dd.style.display = 'none';
+            document.removeEventListener('click', handler);
+          }
+        };
+        document.addEventListener('click', handler);
+      }, 0);
+    }
+  },
+
+  _onOrderCatAllChange(el) {
+    if (el.checked) {
+      document.querySelectorAll('.no-cat-check').forEach(c => { c.checked = false; });
+    }
+    this._applyOrderCatFilter();
+  },
+
+  _onOrderCatChange() {
+    const anyChecked = [...document.querySelectorAll('.no-cat-check:checked')].length > 0;
+    const allEl = document.getElementById('no-cat-all');
+    if (allEl) allEl.checked = !anyChecked;
+    this._applyOrderCatFilter();
+  },
+
+  _applyOrderCatFilter() {
+    const checked = [...document.querySelectorAll('.no-cat-check:checked')];
+    const selectedIds = checked.map(el => el.value);
+    const label = document.getElementById('no-cat-label');
+    if (label) {
+      label.textContent = !checked.length ? 'Todas as categorias'
+        : checked.length === 1 ? checked[0].dataset.name
+        : `${checked.length} categorias`;
+    }
+    document.querySelectorAll('.order-cat-group').forEach(group => {
+      const show = !selectedIds.length || selectedIds.includes(group.dataset.catId);
+      group.style.display = show ? '' : 'none';
+    });
   },
 
   _checkBulk(id) {

@@ -43,7 +43,7 @@ router.get('/:id/products', authMiddleware, async (req, res) => {
   if (!churrascaria_id) return res.status(400).json({ error: 'churrascaria_id é obrigatório' });
   try {
     const { rows } = await pool.query(`
-      SELECT p.id, p.name, p.unit, c.name as category_name, c.color as category_color,
+      SELECT p.id, p.name, p.unit, p.category_id, c.name as category_name, c.color as category_color,
              cp.price, cp.bulk_min_qty, cp.bulk_price, cp.updated_at
       FROM company_products cp
       JOIN products p ON p.id = cp.product_id

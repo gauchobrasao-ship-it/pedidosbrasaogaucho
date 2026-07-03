@@ -44,6 +44,10 @@ const Products = {
     return [...document.querySelectorAll('.prod-cat-check:checked')].map(el => el.value).join(',');
   },
 
+  _getChurrId() {
+    return document.getElementById('prod-filter-churr')?.value || '';
+  },
+
   _catLabel(catIds) {
     if (!catIds) return 'Todas as categorias';
     const ids = catIds.split(',').filter(Boolean);
@@ -95,7 +99,8 @@ const Products = {
     this.load(
       document.getElementById('prod-search')?.value || '',
       catIds,
-      document.getElementById('prod-filter-company')?.value || ''
+      document.getElementById('prod-filter-company')?.value || '',
+      this._getChurrId()
     );
   },
 
@@ -120,8 +125,10 @@ const Products = {
   export(format) {
     document.getElementById('prod-export-menu').style.display = 'none';
     const catIds = this._getCatIds();
+    const churrId = this._getChurrId();
     const params = new URLSearchParams({ format, token: API.token });
     if (catIds) params.set('category_ids', catIds);
+    if (churrId) params.set('churrascaria_id', churrId);
     const url = `/api/products/export?${params}`;
     if (format === 'pdf') {
       window.open(url, '_blank');
@@ -135,12 +142,12 @@ const Products = {
     }
   },
 
-  debouncedLoad(search, catIds, companyId) {
+  debouncedLoad(search, catIds, companyId, churrId) {
     clearTimeout(this._searchTimer);
-    this._searchTimer = setTimeout(() => this.load(search, catIds, companyId), 280);
+    this._searchTimer = setTimeout(() => this.load(search, catIds, companyId, churrId), 280);
   },
 
-  async load(search = '', catIds = '', companyId = '') {
+  async load(search = '', catIds = '', companyId = '', churrId = '') {
     const el = document.getElementById('section-products');
     const isFirstLoad = !el.querySelector('.card');
     if (isFirstLoad) el.innerHTML = '<div class="empty-state">Carregando...</div>';
@@ -149,14 +156,17 @@ const Products = {
       if (search) params.set('search', search);
       if (catIds) params.set('category_ids', catIds);
       if (companyId) params.set('company_id', companyId);
+      if (churrId) params.set('churrascaria_id', churrId);
 
-      const [products, cats, companies] = await Promise.all([
+      const [products, cats, companies, churrascarias] = await Promise.all([
         API.get('/products?' + params),
         this._cache.data ? Promise.resolve(this._cache.data.cats) : API.get('/categories'),
         this._cache.data ? Promise.resolve(this._cache.data.companies) : API.get('/companies'),
+        this._cache.data ? Promise.resolve(this._cache.data.churrs) : API.get('/reports/churrascarias'),
       ]);
       this.categories = cats || [];
       this.companies = companies || [];
+      this.churrascarias = churrascarias || [];
 
       el.innerHTML = `
         <div class="card">
@@ -173,7 +183,7 @@ const Products = {
               <span class="search-icon">🔍</span>
               <input type="text" class="form-control" id="prod-search" placeholder="Buscar produto..."
                 value="${escHtml(search)}"
-                oninput="Products.debouncedLoad(this.value, Products._getCatIds(), document.getElementById('prod-filter-company').value)">
+                oninput="Products.debouncedLoad(this.value, Products._getCatIds(), document.getElementById('prod-filter-company').value, Products._getChurrId())">
             </div>
             <div style="position:relative">
               <button id="prod-cat-btn" class="form-control" onclick="Products.toggleCatDropdown()"
@@ -199,10 +209,18 @@ const Products = {
               </div>
             </div>
             <select class="form-control" id="prod-filter-company" style="max-width:200px"
-              onchange="Products.load(document.getElementById('prod-search').value, Products._getCatIds(), this.value)">
+              onchange="Products.load(document.getElementById('prod-search').value, Products._getCatIds(), this.value, Products._getChurrId())">
               <option value="">Todos os fornecedores</option>
               ${this.companies.map(c =>
                 `<option value="${c.id}" ${String(c.id) === String(companyId) ? 'selected' : ''}>${escHtml(c.name)}</option>`
+              ).join('')}
+            </select>
+            <select class="form-control" id="prod-filter-churr" style="max-width:200px"
+              title="Filtra os preços exibidos pela churrascaria selecionada"
+              onchange="Products.load(document.getElementById('prod-search').value, Products._getCatIds(), document.getElementById('prod-filter-company').value, this.value)">
+              <option value="">Preços: todas as churrascarias</option>
+              ${this.churrascarias.map(ch =>
+                `<option value="${ch.id}" ${String(ch.id) === String(churrId) ? 'selected' : ''}>🔥 ${escHtml(ch.name)}</option>`
               ).join('')}
             </select>
             <div style="position:relative">
@@ -222,7 +240,7 @@ const Products = {
           ${!products || products.length === 0
             ? '<div class="empty-state"><div class="empty-icon">📦</div><p>Nenhum produto encontrado</p></div>'
             : `<div class="table-wrap"><table>
-              <thead><tr><th>Produto</th><th>Categoria</th><th>Unidade</th><th>Fornecedores</th><th>Menor Preço</th><th>Atualização</th><th>Ações</th></tr></thead>
+              <thead><tr><th>Produto</th><th>Categoria</th><th>Unidade</th><th>Fornecedores</th><th>Menor Preço${churrId ? ` <span style="font-weight:400;color:var(--gray)">(${escHtml(this.churrascarias.find(ch => String(ch.id) === String(churrId))?.name || '')})</span>` : ''}</th><th>Atualização</th><th>Ações</th></tr></thead>
               <tbody>${products.map(p => `<tr>
                 <td>
                   <strong>${escHtml(p.name)}</strong>
@@ -459,8 +477,9 @@ const Products = {
         closeModal();
         toast('Produto atualizado!');
         this.load(document.getElementById('prod-search')?.value || '',
-                  document.getElementById('prod-filter-cat')?.value || '',
-                  document.getElementById('prod-filter-company')?.value || '');
+                  this._getCatIds(),
+                  document.getElementById('prod-filter-company')?.value || '',
+                  this._getChurrId());
       } catch (err) { toast(err.message, 'error'); }
       return;
     }
@@ -478,8 +497,9 @@ const Products = {
       closeModal();
       toast(names.length > 1 ? `${names.length} produtos criados!` : 'Produto criado!');
       this.load(document.getElementById('prod-search')?.value || '',
-                document.getElementById('prod-filter-cat')?.value || '',
-                document.getElementById('prod-filter-company')?.value || '');
+                this._getCatIds(),
+                document.getElementById('prod-filter-company')?.value || '',
+                this._getChurrId());
     } catch (err) { toast(err.message, 'error'); }
   },
 
@@ -499,8 +519,9 @@ const Products = {
       this.lastUnit = unit;
       toast(names.length > 1 ? `${names.length} produtos criados! Abrindo novo cadastro...` : 'Produto criado! Abrindo novo cadastro...');
       this.load(document.getElementById('prod-search')?.value || '',
-                document.getElementById('prod-filter-cat')?.value || '',
-                document.getElementById('prod-filter-company')?.value || '');
+                this._getCatIds(),
+                document.getElementById('prod-filter-company')?.value || '',
+                this._getChurrId());
       this.openForm(null, category_id, unit);
     } catch (err) { toast(err.message, 'error'); }
   },
@@ -582,8 +603,9 @@ const Products = {
       toast(`Fornecedor vinculado a ${result.affected} produto${result.affected !== 1 ? 's' : ''}!`);
       this.load(
         document.getElementById('prod-search')?.value || '',
-        document.getElementById('prod-filter-cat')?.value || '',
-        document.getElementById('prod-filter-company')?.value || ''
+        this._getCatIds(),
+        document.getElementById('prod-filter-company')?.value || '',
+        this._getChurrId()
       );
     } catch (err) { toast(err.message, 'error'); }
   },
@@ -618,8 +640,9 @@ const Products = {
       await API.delete(`/products/${id}`);
       toast('Produto desativado');
       this.load(document.getElementById('prod-search')?.value || '',
-                document.getElementById('prod-filter-cat')?.value || '',
-                document.getElementById('prod-filter-company')?.value || '');
+                this._getCatIds(),
+                document.getElementById('prod-filter-company')?.value || '',
+                this._getChurrId());
     } catch (err) { toast(err.message, 'error'); }
   }
 };

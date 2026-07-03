@@ -235,6 +235,17 @@ router.post('/:token/submit', async (req, res) => {
           `UPDATE price_request_items SET ruptura=true, inativo=false, unit_price=NULL, bulk_min_qty=NULL, bulk_price=NULL${isEdit ? ', edited_at=NOW()' : ''} WHERE request_id=$1 AND product_id=$2`,
           [request.id, item.product_id]
         ));
+
+        // Marca ruptura na base de preços (mantém o vínculo, mas sinaliza fora de estoque),
+        // para todas as churrascarias, como já é feito para preços preenchidos.
+        for (const churrId of allChurrascarias) {
+          ops.push(client.query(`
+            INSERT INTO company_products (churrascaria_id, company_id, product_id, active, ruptura)
+            VALUES ($1,$2,$3,1,true)
+            ON CONFLICT (churrascaria_id, company_id, product_id)
+            DO UPDATE SET active=1, ruptura=true, updated_at=NOW()
+          `, [churrId, request.company_id, item.product_id]));
+        }
       }
 
       for (const item of inativoItems) {
@@ -244,6 +255,17 @@ router.post('/:token/submit', async (req, res) => {
           `UPDATE price_request_items SET inativo=true, ruptura=false, unit_price=NULL, bulk_min_qty=NULL, bulk_price=NULL${isEdit ? ', edited_at=NOW()' : ''} WHERE request_id=$1 AND product_id=$2`,
           [request.id, item.product_id]
         ));
+
+        // Fornecedor não vende mais o produto: desativa o vínculo para sumir do comparativo,
+        // para todas as churrascarias, como já é feito para preços preenchidos.
+        for (const churrId of allChurrascarias) {
+          ops.push(client.query(`
+            INSERT INTO company_products (churrascaria_id, company_id, product_id, active, ruptura)
+            VALUES ($1,$2,$3,0,false)
+            ON CONFLICT (churrascaria_id, company_id, product_id)
+            DO UPDATE SET active=0, ruptura=false, updated_at=NOW()
+          `, [churrId, request.company_id, item.product_id]));
+        }
       }
 
       const notifications = [];
@@ -268,10 +290,10 @@ router.post('/:token/submit', async (req, res) => {
         // Salvar preço para todas as churrascarias (sem distinção de preço por unidade)
         for (const churrId of allChurrascarias) {
           ops.push(client.query(`
-            INSERT INTO company_products (churrascaria_id, company_id, product_id, price, bulk_min_qty, bulk_price, active)
-            VALUES ($1,$2,$3,$4,$5,$6,1)
+            INSERT INTO company_products (churrascaria_id, company_id, product_id, price, bulk_min_qty, bulk_price, active, ruptura)
+            VALUES ($1,$2,$3,$4,$5,$6,1,false)
             ON CONFLICT (churrascaria_id, company_id, product_id)
-            DO UPDATE SET price=EXCLUDED.price, bulk_min_qty=EXCLUDED.bulk_min_qty, bulk_price=EXCLUDED.bulk_price, updated_at=NOW()
+            DO UPDATE SET price=EXCLUDED.price, bulk_min_qty=EXCLUDED.bulk_min_qty, bulk_price=EXCLUDED.bulk_price, active=1, ruptura=false, updated_at=NOW()
           `, [churrId, request.company_id, item.product_id, price, bulkQty, bulkPrice]));
         }
 

@@ -282,7 +282,7 @@ const Comparative = {
             </thead>
             <tbody>
               ${products.map(p => {
-                const validPrices = companies.map(c => c.prices[p.id]).filter(pr => pr > 0);
+                const validPrices = companies.filter(c => !c.ruptura?.[p.id]).map(c => c.prices[p.id]).filter(pr => pr > 0);
                 const minPrice = validPrices.length ? Math.min(...validPrices) : null;
                 return `<tr>
                   <td>
@@ -291,13 +291,16 @@ const Comparative = {
                   </td>
                   <td style="text-align:center">${p.quantity}</td>
                   ${companies.map(c => {
+                    const isRuptura = !!c.ruptura?.[p.id];
                     const price = c.prices[p.id];
-                    const sub = (price > 0) ? price * p.quantity : null;
-                    const isBest = minPrice !== null && price === minPrice;
+                    const sub = (!isRuptura && price > 0) ? price * p.quantity : null;
+                    const isBest = !isRuptura && minPrice !== null && price === minPrice;
                     return `<td class="${isBest ? 'cmp-best' : ''}">
-                      ${sub !== null
-                        ? `<div class="cmp-unit-price">${fmtMoney(price)}/un</div><div class="cmp-subtotal">${fmtMoney(sub)}</div>`
-                        : `<span style="color:var(--gray);font-size:13px">—</span>`}
+                      ${isRuptura
+                        ? `<span class="badge badge-gray" style="font-size:11px">Ruptura</span>`
+                        : sub !== null
+                          ? `<div class="cmp-unit-price">${fmtMoney(price)}/un</div><div class="cmp-subtotal">${fmtMoney(sub)}</div>`
+                          : `<span style="color:var(--gray);font-size:13px">—</span>`}
                     </td>`;
                   }).join('')}
                 </tr>`;
@@ -339,6 +342,7 @@ const Comparative = {
       let bestCompany = null;
       let bestPrice = Infinity;
       companies.forEach(c => {
+        if (c.ruptura?.[p.id]) return;
         const price = c.prices[p.id];
         if (price > 0 && price < bestPrice) {
           bestPrice = price;

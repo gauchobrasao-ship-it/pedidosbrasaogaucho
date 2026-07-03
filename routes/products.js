@@ -7,7 +7,7 @@ const { generateProductsPDF } = require('../utils/pdf');
 const router = express.Router();
 
 router.get('/', authMiddleware, async (req, res) => {
-  const { search, category_ids, company_id } = req.query;
+  const { search, category_ids, company_id, churrascaria_id } = req.query;
   const params = [];
   let productFilter = 'WHERE p.active = 1';
   if (search) {
@@ -26,6 +26,12 @@ router.get('/', authMiddleware, async (req, res) => {
     productFilter += ` AND EXISTS (SELECT 1 FROM company_products WHERE product_id = p.id AND company_id = $${params.length} AND active = 1)`;
   }
 
+  let churrFilter = '';
+  if (churrascaria_id) {
+    params.push(churrascaria_id);
+    churrFilter = ` AND cp.churrascaria_id = $${params.length}`;
+  }
+
   const query = `
     WITH link_stats AS (
       SELECT cp.product_id,
@@ -33,14 +39,14 @@ router.get('/', authMiddleware, async (req, res) => {
              array_agg(DISTINCT co.name ORDER BY co.name) as company_names
       FROM company_products cp
       JOIN companies co ON co.id = cp.company_id AND co.active = 1
-      WHERE cp.active = 1
+      WHERE cp.active = 1${churrFilter}
       GROUP BY cp.product_id
     ),
     price_stats AS (
       SELECT cp.product_id, MIN(cp.price) as min_price
       FROM company_products cp
       JOIN companies co ON co.id = cp.company_id AND co.active = 1
-      WHERE cp.active = 1 AND cp.price > 0
+      WHERE cp.active = 1 AND cp.price > 0${churrFilter}
       GROUP BY cp.product_id
     ),
     min_price_row AS (
@@ -49,7 +55,7 @@ router.get('/', authMiddleware, async (req, res) => {
              cp.bulk_price as min_bulk_price, cp.bulk_min_qty as min_bulk_min_qty
       FROM company_products cp
       JOIN companies co ON co.id = cp.company_id AND co.active = 1
-      WHERE cp.active = 1 AND cp.price > 0
+      WHERE cp.active = 1 AND cp.price > 0${churrFilter}
       ORDER BY cp.product_id, cp.price ASC
     )
     SELECT p.id, p.name, p.brand, p.unit, p.category_id,
@@ -115,7 +121,7 @@ router.put('/:id', authMiddleware, requirePermission('manage_products'), async (
 });
 
 router.get('/export', authMiddleware, async (req, res) => {
-  const { category_ids, format } = req.query;
+  const { category_ids, format, churrascaria_id } = req.query;
   const params = [];
   let productFilter = 'WHERE p.active = 1';
   if (category_ids) {
@@ -125,6 +131,11 @@ router.get('/export', authMiddleware, async (req, res) => {
       productFilter += ` AND p.category_id = ANY($${params.length}::int[])`;
     }
   }
+  let churrFilter = '';
+  if (churrascaria_id) {
+    params.push(churrascaria_id);
+    churrFilter = ` AND cp.churrascaria_id = $${params.length}`;
+  }
   try {
     const { rows } = await pool.query(`
       WITH link_stats AS (
@@ -133,14 +144,14 @@ router.get('/export', authMiddleware, async (req, res) => {
                array_agg(DISTINCT co.name ORDER BY co.name) as company_names
         FROM company_products cp
         JOIN companies co ON co.id = cp.company_id AND co.active = 1
-        WHERE cp.active = 1
+        WHERE cp.active = 1${churrFilter}
         GROUP BY cp.product_id
       ),
       price_stats AS (
         SELECT cp.product_id, MIN(cp.price) as min_price
         FROM company_products cp
         JOIN companies co ON co.id = cp.company_id AND co.active = 1
-        WHERE cp.active = 1 AND cp.price > 0
+        WHERE cp.active = 1 AND cp.price > 0${churrFilter}
         GROUP BY cp.product_id
       ),
       min_price_row AS (
@@ -148,7 +159,7 @@ router.get('/export', authMiddleware, async (req, res) => {
                cp.product_id, co.name as min_price_company, cp.updated_at as min_price_updated_at
         FROM company_products cp
         JOIN companies co ON co.id = cp.company_id AND co.active = 1
-        WHERE cp.active = 1 AND cp.price > 0
+        WHERE cp.active = 1 AND cp.price > 0${churrFilter}
         ORDER BY cp.product_id, cp.price ASC
       )
       SELECT p.id, p.name, p.brand, p.unit,

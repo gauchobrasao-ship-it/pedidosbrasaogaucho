@@ -21,7 +21,7 @@ router.post('/', authMiddleware, async (req, res) => {
     );
 
     const { rows: priceRows } = await pool.query(`
-      SELECT cp.company_id, c.name as company_name, cp.product_id, cp.price
+      SELECT cp.company_id, c.name as company_name, cp.product_id, cp.price, cp.ruptura
       FROM company_products cp
       JOIN companies c ON c.id = cp.company_id
       WHERE cp.churrascaria_id = $1 AND cp.product_id = ANY($2::int[]) AND cp.active = 1 AND c.active = 1
@@ -31,9 +31,10 @@ router.post('/', authMiddleware, async (req, res) => {
     const companiesMap = {};
     priceRows.forEach(row => {
       if (!companiesMap[row.company_id]) {
-        companiesMap[row.company_id] = { id: row.company_id, name: row.company_name, prices: {} };
+        companiesMap[row.company_id] = { id: row.company_id, name: row.company_name, prices: {}, ruptura: {} };
       }
       companiesMap[row.company_id].prices[row.product_id] = row.price;
+      if (row.ruptura) companiesMap[row.company_id].ruptura[row.product_id] = true;
     });
 
     const companies = Object.values(companiesMap).map(c => {
@@ -42,7 +43,7 @@ router.post('/', authMiddleware, async (req, res) => {
       productRows.forEach(p => {
         const qty = quantityMap[p.id] || 0;
         const price = c.prices[p.id] || 0;
-        if (price > 0) total += qty * price;
+        if (!c.ruptura[p.id] && price > 0) total += qty * price;
         else missingCount++;
       });
       return { ...c, total, missing_count: missingCount };
