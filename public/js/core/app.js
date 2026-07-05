@@ -69,7 +69,13 @@ const App = {
   },
 
   _secFromPath(path) {
+    if (/^\/cotacoes\/\d+$/.test(path)) return 'quotations';
     return ROUTES[path] || 'dashboard';
+  },
+
+  _maybeOpenQuotationFromPath() {
+    const m = location.pathname.match(/^\/cotacoes\/(\d+)$/);
+    if (m) PriceRequest.view(Number(m[1]));
   },
 
   showLogin() {
@@ -182,7 +188,7 @@ const App = {
     switch (sec) {
       case 'dashboard':   Dashboard.load(); break;
       case 'orders':      Orders.load(); break;
-      case 'quotations':  Quotations.load(); break;
+      case 'quotations':  Quotations.load(); App._maybeOpenQuotationFromPath(); break;
       case 'companies':   Companies.load(); break;
       case 'products':    Products.load(); break;
       case 'categories':  Categories.load(); break;

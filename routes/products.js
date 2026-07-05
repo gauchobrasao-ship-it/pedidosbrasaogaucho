@@ -21,9 +21,11 @@ router.get('/', authMiddleware, async (req, res) => {
       productFilter += ` AND p.category_id = ANY($${params.length}::int[])`;
     }
   }
+  let priceCompanyFilter = '';
   if (company_id) {
     params.push(company_id);
     productFilter += ` AND EXISTS (SELECT 1 FROM company_products WHERE product_id = p.id AND company_id = $${params.length} AND active = 1)`;
+    priceCompanyFilter = ` AND cp.company_id = $${params.length}`;
   }
 
   let churrFilter = '';
@@ -46,7 +48,7 @@ router.get('/', authMiddleware, async (req, res) => {
       SELECT cp.product_id, MIN(cp.price) as min_price
       FROM company_products cp
       JOIN companies co ON co.id = cp.company_id AND co.active = 1
-      WHERE cp.active = 1 AND cp.price > 0${churrFilter}
+      WHERE cp.active = 1 AND cp.price > 0${churrFilter}${priceCompanyFilter}
       GROUP BY cp.product_id
     ),
     min_price_row AS (
@@ -55,7 +57,7 @@ router.get('/', authMiddleware, async (req, res) => {
              cp.bulk_price as min_bulk_price, cp.bulk_min_qty as min_bulk_min_qty
       FROM company_products cp
       JOIN companies co ON co.id = cp.company_id AND co.active = 1
-      WHERE cp.active = 1 AND cp.price > 0${churrFilter}
+      WHERE cp.active = 1 AND cp.price > 0${churrFilter}${priceCompanyFilter}
       ORDER BY cp.product_id, cp.price ASC
     )
     SELECT p.id, p.name, p.brand, p.unit, p.category_id,

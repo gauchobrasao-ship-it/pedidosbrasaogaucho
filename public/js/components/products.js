@@ -240,7 +240,9 @@ const Products = {
           ${!products || products.length === 0
             ? '<div class="empty-state"><div class="empty-icon">📦</div><p>Nenhum produto encontrado</p></div>'
             : `<div class="table-wrap"><table>
-              <thead><tr><th>Produto</th><th>Categoria</th><th>Unidade</th><th>Fornecedores</th><th>Menor Preço${churrId ? ` <span style="font-weight:400;color:var(--gray)">(${escHtml(this.churrascarias.find(ch => String(ch.id) === String(churrId))?.name || '')})</span>` : ''}</th><th>Atualização</th><th>Ações</th></tr></thead>
+              <thead><tr><th>Produto</th><th>Categoria</th><th>Unidade</th><th>Fornecedores</th><th>${companyId ? 'Preço' : 'Menor Preço'}${companyId
+                ? ` <span style="font-weight:400;color:var(--gray)">(${escHtml(this.companies.find(c => String(c.id) === String(companyId))?.name || '')})</span>`
+                : churrId ? ` <span style="font-weight:400;color:var(--gray)">(${escHtml(this.churrascarias.find(ch => String(ch.id) === String(churrId))?.name || '')})</span>` : ''}</th><th>Atualização</th><th>Ações</th></tr></thead>
               <tbody>${products.map(p => `<tr>
                 <td>
                   <strong>${escHtml(p.name)}</strong>

@@ -91,7 +91,8 @@ const Quotations = {
                   <td>${status}</td>
                   <td style="font-size:12px;white-space:nowrap">${fmtDate(r.expires_at)}</td>
                   <td style="white-space:nowrap">
-                    ${hasAny ? `<button class="btn btn-outline btn-sm" onclick="PriceRequest.view(${r.id})" title="Ver cotação">👁 Ver</button>` : ''}
+                    ${hasAny ? `<a class="btn btn-outline btn-sm" href="/cotacoes/${r.id}" title="Ver cotação"
+                      onclick="if(!event.ctrlKey && !event.metaKey && event.button===0){event.preventDefault();PriceRequest.view(${r.id});}">👁 Ver</a>` : ''}
                     <button class="btn btn-outline btn-sm" data-url="${escHtml(url)}"
                       onclick="PriceRequest.copyLink(this.dataset.url)" title="Copiar link">🔗 Link</button>
                     <button class="btn btn-outline btn-sm" style="color:var(--danger);border-color:var(--danger)"
