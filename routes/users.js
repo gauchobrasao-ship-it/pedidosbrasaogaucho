@@ -1,7 +1,7 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const { pool } = require('../database/db');
-const { authMiddleware, requirePermission } = require('../middleware/auth');
+const { authMiddleware, requirePermission, invalidateUserCache } = require('../middleware/auth');
 
 const router = express.Router();
 
@@ -54,6 +54,7 @@ router.put('/:id', authMiddleware, requirePermission('manage_users'), async (req
     if (permissions !== undefined) await pool.query('UPDATE users SET permissions = $1 WHERE id = $2', [permissions, req.params.id]);
     if (active !== undefined) await pool.query('UPDATE users SET active = $1 WHERE id = $2', [active ? 1 : 0, req.params.id]);
 
+    invalidateUserCache(req.params.id);
     res.json({ message: 'Usuário atualizado' });
   } catch (err) {
     console.error(err);
@@ -65,6 +66,7 @@ router.delete('/:id', authMiddleware, requirePermission('manage_users'), async (
   if (parseInt(req.params.id) === req.user.id) return res.status(400).json({ error: 'Não pode desativar o próprio usuário' });
   try {
     await pool.query('UPDATE users SET active = 0 WHERE id = $1', [req.params.id]);
+    invalidateUserCache(req.params.id);
     res.json({ message: 'Usuário desativado' });
   } catch (err) {
     console.error(err);
