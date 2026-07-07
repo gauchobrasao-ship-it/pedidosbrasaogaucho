@@ -5,7 +5,22 @@ const Estoque = {
   _categories: [],
   _companies: [],
 
+  // ── AUTOSAVE STATE ─────────────────────────────
+  _dirty: false,
+  _saving: false,
+  _currentListId: null,
+  _debounceTimer: null,
+  _intervalId: null,
+  AUTOSAVE_DEBOUNCE_MS: 2500,
+  AUTOSAVE_INTERVAL_MS: 20000,
+
+  _clearAutosaveTimers() {
+    if (this._debounceTimer) { clearTimeout(this._debounceTimer); this._debounceTimer = null; }
+    if (this._intervalId) { clearInterval(this._intervalId); this._intervalId = null; }
+  },
+
   async load() {
+    this._clearAutosaveTimers();
     const el = document.getElementById('section-estoque');
     el.innerHTML = '<div class="empty-state">Carregando...</div>';
     try {
@@ -188,6 +203,7 @@ const Estoque = {
 
   // ── EDIT VIEW ────────────────────────────────
   async openEdit(id) {
+    this._clearAutosaveTimers();
     const el = document.getElementById('section-estoque');
     el.innerHTML = '<div class="empty-state">Carregando...</div>';
     try {
@@ -228,9 +244,10 @@ const Estoque = {
             <div style="text-align:right">
               <div style="font-size:13px;color:var(--gold);font-weight:600">${filled}/${items.length} preenchidos</div>
               <div style="font-size:11px;color:var(--gray)">${pct}% completo</div>
+              <div id="est-autosave-status" style="font-size:11px;color:var(--gray);margin-top:2px">&nbsp;</div>
             </div>
-            <button class="btn btn-outline" onclick="Estoque.load()">← Voltar</button>
-            <button class="btn btn-primary" onclick="Estoque._save(${lista.id})">Salvar</button>
+            <button class="btn btn-outline" onclick="Estoque._back(${lista.id})">← Voltar</button>
+            <button class="btn btn-primary" id="est-save-btn-top" onclick="Estoque._save(${lista.id})">Salvar</button>
           </div>
         </div>
 
@@ -278,18 +295,24 @@ const Estoque = {
             </div>`).join('')}
 
         <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:8px;padding-top:16px;border-top:1px solid var(--border)">
-          <button class="btn btn-outline" onclick="Estoque.load()">← Voltar</button>
+          <button class="btn btn-outline" onclick="Estoque._back(${lista.id})">← Voltar</button>
           <button class="btn btn-primary" id="est-save-btn" onclick="Estoque._save(${lista.id})">Salvar</button>
         </div>
       </div>`;
 
     this._dirty = false;
+    this._currentListId = lista.id;
+    this._intervalId = setInterval(() => this._autoSave(lista.id), this.AUTOSAVE_INTERVAL_MS);
   },
 
-  _dirty: false,
-  _markDirty() { this._dirty = true; },
+  _markDirty() {
+    this._dirty = true;
+    this._setAutosaveStatus('pending');
+    if (this._debounceTimer) clearTimeout(this._debounceTimer);
+    this._debounceTimer = setTimeout(() => this._autoSave(this._currentListId), this.AUTOSAVE_DEBOUNCE_MS);
+  },
 
-  async _save(id) {
+  _collectItems() {
     const items = [];
     document.querySelectorAll('.est-qty-input').forEach(input => {
       const product_id = Number(input.dataset.productId);
@@ -299,12 +322,63 @@ const Estoque = {
       const notes = noteEl ? noteEl.value.trim() || null : null;
       items.push({ product_id, quantity, notes });
     });
+    return items;
+  },
+
+  _setAutosaveStatus(status) {
+    const el = document.getElementById('est-autosave-status');
+    if (!el) return;
+    if (status === 'pending') {
+      el.textContent = 'Alterações não salvas';
+      el.style.color = 'var(--gold)';
+    } else if (status === 'saving') {
+      el.textContent = 'Salvando...';
+      el.style.color = 'var(--gray)';
+    } else if (status === 'saved') {
+      const time = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+      el.textContent = `Salvo automaticamente às ${time}`;
+      el.style.color = 'var(--success)';
+    } else if (status === 'error') {
+      el.textContent = 'Falha ao salvar — tentando novamente...';
+      el.style.color = 'var(--danger)';
+    }
+  },
+
+  // Salvamento automático em segundo plano (debounce + intervalo de segurança).
+  // Não navega nem mostra toast, para não interromper o preenchimento.
+  async _autoSave(id) {
+    if (!id || !this._dirty || this._saving) return;
+    this._saving = true;
+    this._setAutosaveStatus('saving');
+    const items = this._collectItems();
+    try {
+      await API.put(`/estoque/${id}/items`, { items });
+      this._dirty = false;
+      this._setAutosaveStatus('saved');
+    } catch (err) {
+      this._setAutosaveStatus('error');
+    } finally {
+      this._saving = false;
+    }
+  },
+
+  // Sai da tela de edição, garantindo que nada fique sem salvar.
+  async _back(id) {
+    this._clearAutosaveTimers();
+    if (this._dirty) await this._autoSave(id);
+    this.load();
+  },
+
+  async _save(id) {
+    this._clearAutosaveTimers();
+    const items = this._collectItems();
 
     const btn = document.getElementById('est-save-btn');
     if (btn) { btn.disabled = true; btn.textContent = 'Salvando...'; }
 
     try {
       await API.put(`/estoque/${id}/items`, { items });
+      this._dirty = false;
       toast('Contagem salva!');
       this.load();
     } catch (err) {
