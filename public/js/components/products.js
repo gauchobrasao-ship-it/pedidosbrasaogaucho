@@ -296,6 +296,7 @@ const Products = {
     const productPromise  = id ? Promise.all([
       API.get(`/products/${id}`),
       API.get(`/products/${id}/companies`),
+      API.get(`/products/${id}/stock-targets`),
     ]) : Promise.resolve(null);
 
     const [formData, productData] = await Promise.all([formDataPromise, productPromise]);
@@ -303,12 +304,16 @@ const Products = {
     this.companies     = formData.companies;
     this.churrascarias = formData.churrs;
 
+    let stockTargets = [];
     if (id && productData) {
       product = productData[0] || {};
       this.linkedCompanies = productData[1] || [];
+      stockTargets = productData[2] || [];
     } else if (!id) {
       this.linkedCompanies = this.lastLinkedCompanies;
     }
+    const targetsMap = {};
+    stockTargets.forEach(t => { targetsMap[t.churrascaria_id] = t.ideal_qty; });
 
     // Build map: { company_id: { churrascaria_id: price } }
     const linkedMap = {};
@@ -407,6 +412,23 @@ const Products = {
          <div style="font-size:11px;color:var(--gray);margin-top:4px">
            Marque em quais churrascarias cada fornecedor vende este produto, com o preço correspondente.
          </div>
+       </div>
+       <div class="form-group" style="margin-top:4px">
+         <label class="form-label">Estoque ideal por churrascaria</label>
+         <div style="display:flex;gap:12px;flex-wrap:wrap">
+           ${this.churrascarias.map(ch => `
+             <div style="flex:1;min-width:140px">
+               <label style="font-size:12px;color:var(--gray);display:block;margin-bottom:4px">🔥 ${escHtml(ch.name)}</label>
+               <input type="number" step="0.001" min="0" class="form-control pf-stock-target"
+                 data-churr-id="${ch.id}"
+                 value="${targetsMap[ch.id] !== undefined && targetsMap[ch.id] !== null ? targetsMap[ch.id] : ''}"
+                 placeholder="Sem meta"
+                 style="padding:6px 10px;font-size:13px">
+             </div>`).join('')}
+         </div>
+         <div style="font-size:11px;color:var(--gray);margin-top:4px">
+           Quantidade máxima que deve ter no estoque até o próximo pedido — usada pra calcular o pedido automático na aba Estoque.
+         </div>
        </div>`,
       `<button class="btn btn-outline" onclick="closeModal()">Cancelar</button>
        ${isNew ? `<button class="btn btn-gold" onclick="Products.saveAndNew()">Salvar e criar outro</button>` : ''}
@@ -442,6 +464,16 @@ const Products = {
     }
   },
 
+  async _saveStockTargets(productId) {
+    const inputs = document.querySelectorAll('.pf-stock-target');
+    if (!inputs.length) return;
+    const targets = [...inputs].map(el => ({
+      churrascaria_id: Number(el.dataset.churrId),
+      ideal_qty: el.value.trim()
+    }));
+    await API.put(`/products/${productId}/stock-targets`, { targets });
+  },
+
   toggleNewCatForm() {
     const form = document.getElementById('pf-new-cat-form');
     form.style.display = form.style.display === 'none' ? 'block' : 'none';
@@ -474,6 +506,7 @@ const Products = {
       try {
         await API.put(`/products/${id}`, { name, category_id, unit, brand });
         await this._saveCompanyLinks(id);
+        await this._saveStockTargets(id);
         this.lastCategoryId = category_id || '';
         this.lastUnit = unit;
         closeModal();
@@ -493,6 +526,7 @@ const Products = {
       for (const name of names) {
         const result = await API.post('/products', { name, category_id, unit, brand });
         await this._saveCompanyLinks(result.id);
+        await this._saveStockTargets(result.id);
       }
       this.lastCategoryId = category_id || '';
       this.lastUnit = unit;
@@ -516,6 +550,7 @@ const Products = {
       for (const name of names) {
         const result = await API.post('/products', { name, category_id, unit, brand });
         await this._saveCompanyLinks(result.id);
+        await this._saveStockTargets(result.id);
       }
       this.lastCategoryId = category_id || '';
       this.lastUnit = unit;

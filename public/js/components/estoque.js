@@ -4,6 +4,7 @@
 const Estoque = {
   _categories: [],
   _companies: [],
+  _churrascarias: [],
 
   // ── AUTOSAVE STATE ─────────────────────────────
   _dirty: false,
@@ -24,13 +25,15 @@ const Estoque = {
     const el = document.getElementById('section-estoque');
     el.innerHTML = '<div class="empty-state">Carregando...</div>';
     try {
-      const [listas, cats, companies] = await Promise.all([
+      const [listas, cats, companies, churrs] = await Promise.all([
         API.get('/estoque'),
         API.get('/categories'),
         API.get('/companies'),
+        API.get('/reports/churrascarias'),
       ]);
       this._categories = cats || [];
       this._companies = companies || [];
+      this._churrascarias = churrs || [];
       this._renderList(el, listas || []);
     } catch (err) {
       el.innerHTML = `<div class="empty-state text-danger">${err.message}</div>`;
@@ -71,7 +74,10 @@ const Estoque = {
                   <td style="white-space:nowrap;font-size:13px">${this._fmtDate(l.created_at)}</td>
                   <td>
                     <div style="font-size:13px;color:var(--white)">${escHtml(l.filter_label || '—')}</div>
-                    <div style="font-size:11px;color:var(--gray);margin-top:2px">${l.filter_type === 'company' ? 'Por fornecedor' : 'Por categoria'}</div>
+                    <div style="font-size:11px;color:var(--gray);margin-top:2px">
+                      ${l.filter_type === 'company' ? 'Por fornecedor' : 'Por categoria'}
+                      ${l.churrascaria_name ? ` · 🔥 ${escHtml(l.churrascaria_name)}` : ''}
+                    </div>
                   </td>
                   <td style="font-size:13px">${l.item_count}</td>
                   <td>
@@ -95,10 +101,20 @@ const Estoque = {
   openCreate() {
     const cats = this._categories;
     const companies = this._companies;
+    const churrs = this._churrascarias;
 
     showModal(
       'Nova Lista de Estoque',
       `<div class="form-group">
+         <label class="form-label">Churrascaria *</label>
+         <select class="form-control" id="est-churr-select">
+           <option value="">Selecione a churrascaria...</option>
+           ${churrs.map(ch => `<option value="${ch.id}">🔥 ${escHtml(ch.name)}</option>`).join('')}
+         </select>
+         <div style="font-size:11px;color:var(--gray);margin-top:4px">Necessária pra calcular o estoque ideal e gerar pedido a partir desta contagem.</div>
+       </div>
+
+       <div class="form-group">
          <label class="form-label">Filtrar por</label>
          <div style="display:flex;gap:12px;margin-bottom:4px">
            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:14px;color:var(--white)">
@@ -172,10 +188,12 @@ const Estoque = {
   },
 
   async _submitCreate() {
+    const churrascaria_id = document.getElementById('est-churr-select')?.value;
+    if (!churrascaria_id) { toast('Selecione a churrascaria', 'error'); return; }
     const filter_type = document.querySelector('input[name="est-filter-type"]:checked')?.value || 'category';
     const notes = document.getElementById('est-notes')?.value.trim() || null;
 
-    let body = { filter_type, notes };
+    let body = { filter_type, notes, churrascaria_id: Number(churrascaria_id) };
 
     if (filter_type === 'company') {
       const company_id = document.getElementById('est-company-select')?.value;
@@ -238,6 +256,7 @@ const Estoque = {
               ${lista.filter_type === 'company' ? 'Por fornecedor' : 'Por categoria'} &nbsp;·&nbsp;
               ${this._fmtDate(lista.created_at)}
               ${lista.created_by_name ? ` &nbsp;·&nbsp; ${escHtml(lista.created_by_name)}` : ''}
+              ${lista.churrascaria_name ? ` &nbsp;·&nbsp; 🔥 ${escHtml(lista.churrascaria_name)}` : ''}
             </div>
           </div>
           <div style="display:flex;align-items:center;gap:12px">
@@ -247,9 +266,16 @@ const Estoque = {
               <div id="est-autosave-status" style="font-size:11px;color:var(--gray);margin-top:2px">&nbsp;</div>
             </div>
             <button class="btn btn-outline" onclick="Estoque._back(${lista.id})">← Voltar</button>
+            ${lista.churrascaria_id && App.canDo('create_orders')
+              ? `<button class="btn btn-gold" id="est-pedido-btn" onclick="Estoque._openPedidoPreview(${lista.id})">📋 Criar Pedido</button>`
+              : ''}
             <button class="btn btn-primary" id="est-save-btn-top" onclick="Estoque._save(${lista.id})">Salvar</button>
           </div>
         </div>
+
+        ${!lista.churrascaria_id ? `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:12px;color:var(--gray)">
+          ℹ Esta lista foi criada antes do campo de churrascaria existir, então não dá pra gerar pedido automático a partir dela.
+        </div>` : ''}
 
         ${lista.notes ? `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:13px;color:var(--gray)">${escHtml(lista.notes)}</div>` : ''}
 
@@ -263,11 +289,12 @@ const Estoque = {
               </div>
               <div class="table-wrap">
                 <table>
-                  <thead><tr><th>Produto</th><th>Unidade</th><th style="width:130px">Quantidade</th><th>Observação</th></tr></thead>
+                  <thead><tr><th>Produto</th><th>Unidade</th><th style="width:90px">Meta</th><th style="width:130px">Quantidade</th><th>Observação</th></tr></thead>
                   <tbody>
                     ${group.items.map(item => `<tr>
                       <td><strong style="font-size:13px">${escHtml(item.product_name)}</strong></td>
                       <td><span class="badge badge-gray">${escHtml(item.unit || 'un')}</span></td>
+                      <td style="font-size:13px;color:var(--gray)">${item.ideal_qty !== null && item.ideal_qty !== undefined ? item.ideal_qty : '—'}</td>
                       <td>
                         <input type="number" step="0.001" min="0"
                           id="est-qty-${item.product_id}"
@@ -384,6 +411,146 @@ const Estoque = {
     } catch (err) {
       if (btn) { btn.disabled = false; btn.textContent = 'Salvar'; }
       toast(err.message, 'error');
+    }
+  },
+
+  // ── CRIAR PEDIDO A PARTIR DA CONTAGEM ──────────
+  async _openPedidoPreview(id) {
+    // garante que a contagem em tela foi salva antes de calcular o pedido
+    this._clearAutosaveTimers();
+    if (this._dirty) await this._autoSave(id);
+
+    const btn = document.getElementById('est-pedido-btn');
+    if (btn) { btn.disabled = true; btn.textContent = 'Calculando...'; }
+    try {
+      const preview = await API.get(`/estoque/${id}/pedido-preview`);
+      this._pedidoPreview = preview;
+      this._renderPedidoPreviewModal(preview);
+    } catch (err) {
+      toast(err.message, 'error');
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = '📋 Criar Pedido'; }
+    }
+  },
+
+  _pedidoWarnings(preview) {
+    const box = (title, list) => !list.length ? '' : `
+      <div style="margin-top:8px;background:#E5393514;border:1px solid #E5393540;border-radius:8px;padding:12px 14px;margin-bottom:10px">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:#E53935;margin-bottom:8px">${title} — ${list.length}</div>
+        <ul style="margin:0;padding-left:18px;font-size:12px;color:var(--gray);line-height:1.8">
+          ${list.map(p => `<li>${escHtml(p.name)}</li>`).join('')}
+        </ul>
+      </div>`;
+    return box('Sem estoque ideal definido', preview.sem_meta)
+         + box('Ainda não contados', preview.nao_contado)
+         + box('Sem fornecedor com preço cadastrado', preview.sem_fornecedor);
+  },
+
+  _renderPedidoPreviewModal(preview) {
+    const { groups } = preview;
+
+    if (!groups.length) {
+      showModal('📋 Criar Pedido',
+        `<div class="empty-state"><div class="empty-icon">✅</div><p>Nada precisa ser reposto agora.</p></div>${this._pedidoWarnings(preview)}`,
+        `<button class="btn btn-outline" onclick="closeModal()">Fechar</button>`);
+      return;
+    }
+
+    const groupsHtml = groups.map((g, gi) => {
+      const subtotal = g.items.reduce((s, it) => s + it.needed_qty * (it.price || 0), 0);
+      return `
+      <div style="margin-bottom:20px">
+        <div style="font-weight:700;font-size:14px;color:var(--gold);border-bottom:1px solid var(--border);padding-bottom:6px;margin-bottom:8px">
+          ${escHtml(g.company_name)}
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Produto</th><th>UN</th><th style="width:100px">Qtd</th><th style="width:110px">Preço Unit.</th><th style="width:100px">Subtotal</th></tr></thead>
+            <tbody>
+              ${g.items.map(it => `<tr>
+                <td style="font-weight:600">${escHtml(it.name)}</td>
+                <td><span class="badge badge-gray">${escHtml(it.unit||'un')}</span></td>
+                <td><input type="number" step="0.001" min="0" class="form-control"
+                      id="pp-qty-${gi}-${it.product_id}" value="${it.needed_qty}"
+                      style="width:90px" oninput="Estoque._recalcPedidoPreview(${gi})"></td>
+                <td><input type="number" step="0.01" min="0" class="form-control"
+                      id="pp-price-${gi}-${it.product_id}" value="${Number(it.price||0).toFixed(2)}"
+                      style="width:100px" oninput="Estoque._recalcPedidoPreview(${gi})"></td>
+                <td class="text-gold" id="pp-sub-${gi}-${it.product_id}">${fmtMoney(it.needed_qty*(it.price||0))}</td>
+              </tr>`).join('')}
+            </tbody>
+            <tfoot>
+              <tr><td colspan="4" style="text-align:right;font-weight:700;font-size:13px">Subtotal:</td>
+                <td style="text-align:right;font-weight:700;color:var(--gold)" id="pp-group-total-${gi}">${fmtMoney(subtotal)}</td></tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>`;
+    }).join('');
+
+    showModal(
+      '📋 Criar Pedido',
+      `<div style="font-size:13px;color:var(--gray);margin-bottom:14px">
+         Calculado como <strong style="color:var(--white)">estoque ideal − estoque atual</strong>. Revise quantidades e preços antes de confirmar — um pedido será criado por fornecedor.
+       </div>
+       ${groupsHtml}
+       ${this._pedidoWarnings(preview)}`,
+      `<button class="btn btn-outline" onclick="closeModal()">Cancelar</button>
+       <button class="btn btn-primary" id="pp-confirm-btn" onclick="Estoque._confirmarPedidos()">Confirmar e Criar Pedido(s)</button>`
+    );
+  },
+
+  _recalcPedidoPreview(gi) {
+    const g = this._pedidoPreview?.groups?.[gi];
+    if (!g) return;
+    let total = 0;
+    g.items.forEach(it => {
+      const qty = parseFloat(document.getElementById(`pp-qty-${gi}-${it.product_id}`)?.value || 0);
+      const price = parseFloat(document.getElementById(`pp-price-${gi}-${it.product_id}`)?.value || 0);
+      const sub = qty * price;
+      total += sub;
+      const subEl = document.getElementById(`pp-sub-${gi}-${it.product_id}`);
+      if (subEl) subEl.textContent = fmtMoney(sub);
+    });
+    const totalEl = document.getElementById(`pp-group-total-${gi}`);
+    if (totalEl) totalEl.textContent = fmtMoney(total);
+  },
+
+  async _confirmarPedidos() {
+    const preview = this._pedidoPreview;
+    if (!preview) return;
+    const btn = document.getElementById('pp-confirm-btn');
+    if (btn) { btn.disabled = true; btn.textContent = 'Criando...'; }
+    const createdIds = [];
+    try {
+      for (let gi = 0; gi < preview.groups.length; gi++) {
+        const g = preview.groups[gi];
+        const items = g.items.map(it => {
+          const quantity = parseFloat(document.getElementById(`pp-qty-${gi}-${it.product_id}`)?.value || 0);
+          const unit_price = parseFloat(document.getElementById(`pp-price-${gi}-${it.product_id}`)?.value || 0);
+          return { product_id: it.product_id, quantity, unit_price };
+        }).filter(i => i.quantity > 0);
+        if (!items.length) continue;
+        const result = await API.post('/orders', {
+          churrascaria_id: preview.churrascaria_id,
+          company_id: g.company_id,
+          items
+        });
+        createdIds.push(result.id);
+      }
+      closeModal();
+      if (!createdIds.length) {
+        toast('Nenhum pedido gerado (quantidades zeradas)', 'warning');
+        return;
+      }
+      toast(`${createdIds.length} pedido${createdIds.length > 1 ? 's' : ''} criado${createdIds.length > 1 ? 's' : ''}!`);
+      createdIds.forEach((id, idx) => {
+        setTimeout(() => window.open(`/api/orders/${id}/pdf?token=${API.token}`, '_blank'), 400 * idx);
+      });
+      this.openEdit(this._currentListId);
+    } catch (err) {
+      toast(err.message, 'error');
+      if (btn) { btn.disabled = false; btn.textContent = 'Confirmar e Criar Pedido(s)'; }
     }
   },
 

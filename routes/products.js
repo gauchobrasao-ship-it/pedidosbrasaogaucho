@@ -238,6 +238,47 @@ router.get('/:id', authMiddleware, async (req, res) => {
   }
 });
 
+router.get('/:id/stock-targets', authMiddleware, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      'SELECT churrascaria_id, ideal_qty FROM product_stock_targets WHERE product_id = $1',
+      [req.params.id]
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
+router.put('/:id/stock-targets', authMiddleware, requirePermission('manage_products'), async (req, res) => {
+  const productId = req.params.id;
+  const targets = req.body.targets || [];
+  try {
+    const ops = targets.map(t => {
+      const ideal = t.ideal_qty === '' || t.ideal_qty === null || t.ideal_qty === undefined
+        ? null : parseFloat(t.ideal_qty);
+      if (ideal === null || isNaN(ideal)) {
+        return pool.query(
+          'DELETE FROM product_stock_targets WHERE product_id = $1 AND churrascaria_id = $2',
+          [productId, t.churrascaria_id]
+        );
+      }
+      return pool.query(`
+        INSERT INTO product_stock_targets (product_id, churrascaria_id, ideal_qty)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (product_id, churrascaria_id)
+        DO UPDATE SET ideal_qty = EXCLUDED.ideal_qty, updated_at = NOW()
+      `, [productId, t.churrascaria_id, ideal]);
+    });
+    await Promise.all(ops);
+    res.json({ message: 'Estoque ideal atualizado' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
 router.get('/:id/companies', authMiddleware, async (req, res) => {
   try {
     const { rows } = await pool.query(`
