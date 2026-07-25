@@ -38,17 +38,6 @@ app.use('/api/perdas', perdasRoutes);
 app.use('/api/notifications', notificationsRoutes);
 app.use('/api/estoque', estoqueRoutes);
 
-app.get('/__debug-fs', (req, res) => {
-  const fs = require('fs');
-  const pub = path.join(__dirname, 'public');
-  let publicList = [];
-  let iconsList = [];
-  let err = null;
-  try { publicList = fs.readdirSync(pub); } catch (e) { err = String(e); }
-  try { iconsList = fs.readdirSync(path.join(pub, 'icons')); } catch (e) { err = (err || '') + ' | icons: ' + String(e); }
-  res.json({ dirname: __dirname, publicList, iconsList, err });
-});
-
 app.get('/cotacao/:token', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'cotacao.html'));
 });
