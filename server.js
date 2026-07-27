@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const fs = require('fs');
 require('dotenv').config();
 
 const { initDatabase } = require('./database/db');
@@ -22,7 +23,7 @@ const app = express();
 
 app.use(cors());
 app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public'), { maxAge: '1h', etag: true }));
+app.use(express.static(path.join(__dirname, 'public'), { maxAge: '1h', etag: true, index: false }));
 
 app.use('/api/auth', authRoutes);
 app.use('/api/users', usersRoutes);
@@ -38,12 +39,26 @@ app.use('/api/perdas', perdasRoutes);
 app.use('/api/notifications', notificationsRoutes);
 app.use('/api/estoque', estoqueRoutes);
 
+// Amarra os <script src="/js/...">? a um identificador do deploy, pra forçar
+// o navegador (inclusive o atalho de PWA instalado, que costuma cachear mais
+// agressivo) a buscar o JS novo depois de cada deploy — sem isso, a página em
+// si pode até atualizar mas os scripts antigos continuam servidos do cache.
+const BUILD_VERSION = (process.env.VERCEL_GIT_COMMIT_SHA || String(Date.now())).slice(0, 10);
+function serveVersionedHtml(filePath, res) {
+  fs.readFile(filePath, 'utf8', (err, html) => {
+    if (err) return res.status(500).send('Erro ao carregar a página');
+    const versioned = html.replace(/(<script src="\/js\/[^"]+)"/g, `$1?v=${BUILD_VERSION}"`);
+    res.set('Cache-Control', 'no-cache');
+    res.send(versioned);
+  });
+}
+
 app.get('/cotacao/:token', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'cotacao.html'));
+  serveVersionedHtml(path.join(__dirname, 'public', 'cotacao.html'), res);
 });
 
 app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+  serveVersionedHtml(path.join(__dirname, 'public', 'index.html'), res);
 });
 
 if (require.main === module) {
