@@ -37,17 +37,20 @@ router.get('/dashboard', authMiddleware, async (req, res) => {
 
   try {
     const cfParams = ids ? [ids] : [];
-    const cfSql = ids ? ` AND o.churrascaria_id = ANY($${cfParams.length}::int[])` : '';
+    // Duas variantes do filtro: nas queries com data, o array de ids vem depois
+    // do parâmetro de data ($2); em recentOrders ele é o único parâmetro ($1).
+    const cfSqlAfterDate = ids ? ` AND o.churrascaria_id = ANY($2::int[])` : '';
+    const cfSqlOnly = ids ? ` AND o.churrascaria_id = ANY($1::int[])` : '';
 
     const [todayStats, yesterdayStats, monthStats, last7, byChurr, recentOrders, companyCount, productCount] = await Promise.all([
-      pool.query(`SELECT COUNT(*)::int as orders, COALESCE(SUM(total),0) as value FROM orders o WHERE o.created_at::date=$1${cfSql}`, [today, ...cfParams]),
-      pool.query(`SELECT COUNT(*)::int as orders, COALESCE(SUM(total),0) as value FROM orders o WHERE o.created_at::date=$1${cfSql}`, [yesterday, ...cfParams]),
-      pool.query(`SELECT COUNT(*)::int as orders, COALESCE(SUM(total),0) as value FROM orders o WHERE o.created_at::date>=$1${cfSql}`, [monthStart, ...cfParams]),
-      pool.query(`SELECT o.created_at::date as date, COUNT(*)::int as orders, COALESCE(SUM(total),0) as value FROM orders o WHERE o.created_at::date>=$1${cfSql} GROUP BY o.created_at::date ORDER BY date`, [sevenDaysAgo, ...cfParams]),
+      pool.query(`SELECT COUNT(*)::int as orders, COALESCE(SUM(total),0) as value FROM orders o WHERE o.created_at::date=$1${cfSqlAfterDate}`, [today, ...cfParams]),
+      pool.query(`SELECT COUNT(*)::int as orders, COALESCE(SUM(total),0) as value FROM orders o WHERE o.created_at::date=$1${cfSqlAfterDate}`, [yesterday, ...cfParams]),
+      pool.query(`SELECT COUNT(*)::int as orders, COALESCE(SUM(total),0) as value FROM orders o WHERE o.created_at::date>=$1${cfSqlAfterDate}`, [monthStart, ...cfParams]),
+      pool.query(`SELECT o.created_at::date as date, COUNT(*)::int as orders, COALESCE(SUM(total),0) as value FROM orders o WHERE o.created_at::date>=$1${cfSqlAfterDate} GROUP BY o.created_at::date ORDER BY date`, [sevenDaysAgo, ...cfParams]),
       ids
         ? pool.query(`SELECT ch.id, ch.name, COUNT(o.id)::int as orders, COALESCE(SUM(o.total),0) as value FROM churrascarias ch LEFT JOIN orders o ON o.churrascaria_id = ch.id WHERE ch.id = ANY($1::int[]) GROUP BY ch.id ORDER BY ch.name`, [ids])
         : pool.query(`SELECT ch.id, ch.name, COUNT(o.id)::int as orders, COALESCE(SUM(o.total),0) as value FROM churrascarias ch LEFT JOIN orders o ON o.churrascaria_id = ch.id GROUP BY ch.id ORDER BY ch.name`),
-      pool.query(`SELECT o.id, o.total, o.created_at, ch.name as churrascaria_name, c.name as company_name, u.name as user_name FROM orders o JOIN churrascarias ch ON ch.id = o.churrascaria_id JOIN companies c ON c.id = o.company_id JOIN users u ON u.id = o.user_id WHERE 1=1${cfSql} ORDER BY o.created_at DESC LIMIT 8`, cfParams),
+      pool.query(`SELECT o.id, o.total, o.created_at, ch.name as churrascaria_name, c.name as company_name, u.name as user_name FROM orders o JOIN churrascarias ch ON ch.id = o.churrascaria_id JOIN companies c ON c.id = o.company_id JOIN users u ON u.id = o.user_id WHERE 1=1${cfSqlOnly} ORDER BY o.created_at DESC LIMIT 8`, cfParams),
       pool.query('SELECT COUNT(*)::int as cnt FROM companies WHERE active=1'),
       pool.query('SELECT COUNT(*)::int as cnt FROM products WHERE active=1'),
     ]);
