@@ -64,6 +64,7 @@ const Estoque = {
                 <th>Filtro</th>
                 <th>Itens</th>
                 <th>Preenchidos</th>
+                <th>Pedido</th>
                 <th>Criado por</th>
                 <th>Ações</th>
               </tr></thead>
@@ -83,6 +84,11 @@ const Estoque = {
                   <td>
                     <span style="font-size:13px;color:${pctColor};font-weight:600">${l.filled_count}/${l.item_count}</span>
                     <span style="font-size:11px;color:var(--gray);margin-left:4px">(${pct}%)</span>
+                  </td>
+                  <td>
+                    ${l.order_count > 0
+                      ? `<span class="badge badge-success" style="cursor:pointer" onclick="Estoque._viewOrders(${l.id})">✅ Pedido feito${l.order_count > 1 ? ` (${l.order_count})` : ''}</span>`
+                      : '<span style="font-size:12px;color:var(--gray)">—</span>'}
                   </td>
                   <td style="font-size:13px;color:var(--gray)">${escHtml(l.created_by_name || '—')}</td>
                   <td>
@@ -443,15 +449,19 @@ const Estoque = {
       </div>`;
     return box('Sem estoque ideal definido', preview.sem_meta)
          + box('Ainda não contados', preview.nao_contado)
-         + box('Sem fornecedor com preço cadastrado', preview.sem_fornecedor);
+         + box('Sem fornecedor vinculado', preview.sem_fornecedor);
   },
 
   _renderPedidoPreviewModal(preview) {
     const { groups } = preview;
 
     if (!groups.length) {
+      const hasPendencias = preview.sem_meta.length || preview.nao_contado.length || preview.sem_fornecedor.length;
+      const body = hasPendencias
+        ? `<div class="empty-state"><div class="empty-icon">⚠️</div><p>Nenhum pedido pôde ser gerado — veja os itens que precisam de atenção abaixo.</p></div>`
+        : `<div class="empty-state"><div class="empty-icon">✅</div><p>Nada precisa ser reposto agora.</p></div>`;
       showModal('📋 Criar Pedido',
-        `<div class="empty-state"><div class="empty-icon">✅</div><p>Nada precisa ser reposto agora.</p></div>${this._pedidoWarnings(preview)}`,
+        `${body}${this._pedidoWarnings(preview)}`,
         `<button class="btn btn-outline" onclick="closeModal()">Fechar</button>`);
       return;
     }
@@ -534,7 +544,8 @@ const Estoque = {
         const result = await API.post('/orders', {
           churrascaria_id: preview.churrascaria_id,
           company_id: g.company_id,
-          items
+          items,
+          stock_list_id: this._currentListId
         });
         createdIds.push(result.id);
       }
@@ -551,6 +562,35 @@ const Estoque = {
     } catch (err) {
       toast(err.message, 'error');
       if (btn) { btn.disabled = false; btn.textContent = 'Confirmar e Criar Pedido(s)'; }
+    }
+  },
+
+  // Mostra os pedidos gerados a partir de uma contagem, com acesso rápido a PDF/WhatsApp
+  async _viewOrders(listId) {
+    try {
+      const orders = await API.get(`/orders?stock_list_id=${listId}`);
+      if (!orders || !orders.length) { toast('Nenhum pedido encontrado para esta lista', 'warning'); return; }
+      const rows = orders.map(o => `
+        <tr>
+          <td><span class="badge badge-gold">#${String(o.id).padStart(6, '0')}</span></td>
+          <td style="font-size:13px">${escHtml(o.company_name)}</td>
+          <td class="text-gold" style="font-size:13px">${fmtMoney(o.total)}</td>
+          <td style="font-size:13px;white-space:nowrap">${this._fmtDate(o.created_at)}</td>
+          <td>
+            <div class="flex flex-gap">
+              <button class="btn btn-gold btn-sm" onclick="Orders.viewPDF(${o.id})">📄 PDF</button>
+              <button class="btn btn-success btn-sm" onclick="Orders.shareWhatsApp(${o.id})">WhatsApp</button>
+            </div>
+          </td>
+        </tr>`).join('');
+      showModal('✅ Pedido(s) desta contagem',
+        `<div class="table-wrap"><table>
+           <thead><tr><th>Nº</th><th>Fornecedor</th><th>Total</th><th>Data</th><th>Ações</th></tr></thead>
+           <tbody>${rows}</tbody>
+         </table></div>`,
+        `<button class="btn btn-outline" onclick="closeModal()">Fechar</button>`);
+    } catch (err) {
+      toast(err.message, 'error');
     }
   },
 

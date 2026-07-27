@@ -13,7 +13,7 @@ function buildChurrFilter(user, params) {
 }
 
 router.get('/', authMiddleware, requirePermission('view_orders'), async (req, res) => {
-  const { churrascaria_id, company_id, from, to } = req.query;
+  const { churrascaria_id, company_id, from, to, stock_list_id } = req.query;
   const params = [];
   let query = `
     SELECT o.*, ch.name as churrascaria_name, c.name as company_name, u.name as user_name
@@ -27,6 +27,7 @@ router.get('/', authMiddleware, requirePermission('view_orders'), async (req, re
   if (company_id) { params.push(company_id); query += ` AND o.company_id = $${params.length}`; }
   if (from) { params.push(from); query += ` AND o.created_at::date >= $${params.length}`; }
   if (to) { params.push(to); query += ` AND o.created_at::date <= $${params.length}`; }
+  if (stock_list_id) { params.push(stock_list_id); query += ` AND o.stock_list_id = $${params.length}`; }
   query += buildChurrFilter(req.user, params);
   query += ' ORDER BY o.created_at DESC';
   try {
@@ -76,7 +77,7 @@ router.get('/:id', authMiddleware, requirePermission('view_orders'), async (req,
 });
 
 router.post('/', authMiddleware, requirePermission('create_orders'), async (req, res) => {
-  const { churrascaria_id, company_id, items, observations } = req.body;
+  const { churrascaria_id, company_id, items, observations, stock_list_id } = req.body;
   if (!churrascaria_id || !company_id) return res.status(400).json({ error: 'Churrascaria e empresa são obrigatórios' });
 
   const validItems = (items || []).filter(i => i.quantity && parseFloat(i.quantity) > 0);
@@ -87,8 +88,8 @@ router.post('/', authMiddleware, requirePermission('create_orders'), async (req,
   try {
     const orderId = await withTransaction(async (client) => {
       const { rows } = await client.query(
-        'INSERT INTO orders (churrascaria_id, company_id, user_id, observations, total) VALUES ($1,$2,$3,$4,$5) RETURNING id',
-        [churrascaria_id, company_id, req.user.id, observations || null, total]
+        'INSERT INTO orders (churrascaria_id, company_id, user_id, observations, total, stock_list_id) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id',
+        [churrascaria_id, company_id, req.user.id, observations || null, total, stock_list_id || null]
       );
       const id = rows[0].id;
 

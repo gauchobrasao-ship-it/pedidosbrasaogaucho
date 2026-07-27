@@ -12,12 +12,14 @@ router.get('/', async (req, res) => {
       SELECT sl.id, sl.filter_type, sl.filter_label, sl.notes, sl.created_at, sl.updated_at,
              sl.churrascaria_id, ch.name as churrascaria_name,
              u.name as created_by_name,
-             COUNT(sli.id)::int as item_count,
-             COUNT(sli.id) FILTER (WHERE sli.quantity IS NOT NULL)::int as filled_count
+             COUNT(DISTINCT sli.id)::int as item_count,
+             COUNT(DISTINCT sli.id) FILTER (WHERE sli.quantity IS NOT NULL)::int as filled_count,
+             COUNT(DISTINCT o.id)::int as order_count
       FROM stock_lists sl
       LEFT JOIN users u ON u.id = sl.created_by
       LEFT JOIN churrascarias ch ON ch.id = sl.churrascaria_id
       LEFT JOIN stock_list_items sli ON sli.stock_list_id = sl.id
+      LEFT JOIN orders o ON o.stock_list_id = sl.id
       GROUP BY sl.id, u.name, ch.name
       ORDER BY sl.created_at DESC
     `);
@@ -64,19 +66,28 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// Calcula o que falta repor (estoque ideal - estoque atual) e agrupa por fornecedor
-// mais barato de cada produto na churrascaria da lista — mesma regra que o Comparativo
-// usa (ativo, sem ruptura, menor preço). Consulta única (CTEs) pra economizar round-trips.
+// Calcula o que falta repor (estoque ideal - estoque atual) e agrupa por fornecedor.
+// Lista "por fornecedor" (filter_type='company') sempre usa esse fornecedor fixo.
+// Lista "por categoria" usa o fornecedor mais barato (ativo, sem ruptura), com
+// preço > 0 tendo prioridade mas não sendo obrigatório — senão um produto sem
+// preço cadastrado em lugar nenhum nunca entraria no pedido. Consulta única
+// (CTEs) pra economizar round-trips.
 router.get('/:id/pedido-preview', async (req, res) => {
   try {
     const { rows: listRows } = await pool.query(
-      'SELECT id, churrascaria_id FROM stock_lists WHERE id = $1', [req.params.id]
+      'SELECT id, churrascaria_id, filter_type, company_id FROM stock_lists WHERE id = $1', [req.params.id]
     );
     const lista = listRows[0];
     if (!lista) return res.status(404).json({ error: 'Lista não encontrada' });
     if (!lista.churrascaria_id) {
       return res.status(400).json({ error: 'Esta lista não tem churrascaria definida — crie uma lista nova pra gerar pedido' });
     }
+    // Lista feita "por fornecedor": o pedido vai pra esse fornecedor mesmo que o
+    // preço ainda não esteja cadastrado (fica 0,00, editável na hora de confirmar).
+    // Lista "por categoria": mantém a regra de pegar o fornecedor mais barato, mas
+    // sem exigir preço > 0 — senão um produto sem preço em nenhum lugar nunca
+    // entra no pedido, mesmo precisando de reposição.
+    const fixedCompanyId = lista.filter_type === 'company' ? lista.company_id : null;
 
     const { rows } = await pool.query(`
       WITH itens AS (
@@ -91,16 +102,17 @@ router.get('/:id/pedido-preview', async (req, res) => {
         SELECT DISTINCT ON (cp.product_id) cp.product_id, cp.company_id, co.name as company_name, cp.price
         FROM company_products cp
         JOIN companies co ON co.id = cp.company_id AND co.active = 1
-        WHERE cp.churrascaria_id = $2 AND cp.active = 1 AND cp.ruptura = false AND cp.price > 0
+        WHERE cp.churrascaria_id = $2 AND cp.active = 1 AND cp.ruptura = false
           AND cp.product_id IN (SELECT product_id FROM itens)
-        ORDER BY cp.product_id, cp.price ASC
+          AND ($3::int IS NULL OR cp.company_id = $3)
+        ORDER BY cp.product_id, (cp.price > 0) DESC, cp.price ASC
       )
       SELECT i.product_id, i.name, i.unit, i.atual, i.ideal_qty,
              f.company_id, f.company_name, f.price
       FROM itens i
       LEFT JOIN fornecedor f ON f.product_id = i.product_id
       ORDER BY i.name
-    `, [req.params.id, lista.churrascaria_id]);
+    `, [req.params.id, lista.churrascaria_id, fixedCompanyId]);
 
     const groupsMap = new Map();
     const sem_meta = [], nao_contado = [], sem_fornecedor = [];
