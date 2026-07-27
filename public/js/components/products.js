@@ -421,7 +421,7 @@ const Products = {
                <label style="font-size:12px;color:var(--gray);display:block;margin-bottom:4px">🔥 ${escHtml(ch.name)}</label>
                <input type="number" step="0.001" min="0" class="form-control pf-stock-target"
                  data-churr-id="${ch.id}"
-                 value="${targetsMap[ch.id] !== undefined && targetsMap[ch.id] !== null ? targetsMap[ch.id] : ''}"
+                 value="${targetsMap[ch.id] !== undefined && targetsMap[ch.id] !== null ? fmtQty(targetsMap[ch.id]) : ''}"
                  placeholder="Sem meta"
                  style="padding:6px 10px;font-size:13px">
              </div>`).join('')}
