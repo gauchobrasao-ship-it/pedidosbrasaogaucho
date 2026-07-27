@@ -300,11 +300,11 @@ const Estoque = {
                     ${group.items.map(item => `<tr>
                       <td><strong style="font-size:13px">${escHtml(item.product_name)}</strong></td>
                       <td><span class="badge badge-gray">${escHtml(item.unit || 'un')}</span></td>
-                      <td style="font-size:13px;color:var(--gray)">${item.ideal_qty !== null && item.ideal_qty !== undefined ? item.ideal_qty : '—'}</td>
+                      <td style="font-size:13px;color:var(--gray)">${item.ideal_qty !== null && item.ideal_qty !== undefined ? fmtQty(item.ideal_qty) : '—'}</td>
                       <td>
                         <input type="number" step="0.001" min="0"
                           id="est-qty-${item.product_id}"
-                          value="${item.quantity !== null ? item.quantity : ''}"
+                          value="${item.quantity !== null ? fmtQty(item.quantity) : ''}"
                           placeholder="0"
                           class="form-control est-qty-input"
                           data-product-id="${item.product_id}"

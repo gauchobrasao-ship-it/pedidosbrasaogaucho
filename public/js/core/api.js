@@ -43,6 +43,12 @@ function fmtMoney(v) {
 function fmtDate(d) {
   return new Date(d).toLocaleDateString('pt-BR');
 }
+// Postgres devolve NUMERIC como string de casas fixas ("1.000") — isso tira
+// os zeros à direita pra exibir "1" em vez de "1.000", mantendo decimais reais.
+function fmtQty(v) {
+  if (v === null || v === undefined || v === '') return '';
+  return String(parseFloat(v));
+}
 function fmtDateTime(d) {
   return new Date(d).toLocaleString('pt-BR');
 }
