@@ -87,8 +87,10 @@ const Estoque = {
                   </td>
                   <td>
                     ${l.order_count > 0
-                      ? `<span class="badge badge-success" style="cursor:pointer" onclick="Estoque._viewOrders(${l.id})">✅ Pedido feito${l.order_count > 1 ? ` (${l.order_count})` : ''}</span>`
-                      : '<span style="font-size:12px;color:var(--gray)">—</span>'}
+                      ? `<button class="btn btn-success btn-sm" onclick="Estoque._viewOrders(${l.id})">✅ Pedido feito${l.order_count > 1 ? ` (${l.order_count})` : ''}</button>`
+                      : (l.churrascaria_id && App.canDo('create_orders')
+                          ? `<button class="btn btn-gold btn-sm" id="est-list-pedir-${l.id}" onclick="Estoque._pedirFromList(${l.id})">Pedir</button>`
+                          : '<span style="font-size:12px;color:var(--gray)">—</span>')}
                   </td>
                   <td style="font-size:13px;color:var(--gray)">${escHtml(l.created_by_name || '—')}</td>
                   <td>
@@ -421,12 +423,18 @@ const Estoque = {
   },
 
   // ── CRIAR PEDIDO A PARTIR DA CONTAGEM ──────────
-  async _openPedidoPreview(id) {
+  // Chamado tanto pelo botão "Criar Pedido" da tela de edição quanto pelo botão
+  // "Pedir" da listagem — `returnTo` decide se, depois de confirmar, volta pra
+  // edição da lista ou fica na listagem (só recarregando os dados).
+  async _openPedidoPreview(id, { btnId = 'est-pedido-btn', returnTo = 'edit' } = {}) {
     // garante que a contagem em tela foi salva antes de calcular o pedido
     this._clearAutosaveTimers();
     if (this._dirty) await this._autoSave(id);
+    this._currentListId = id;
+    this._pedidoReturnTo = returnTo;
 
-    const btn = document.getElementById('est-pedido-btn');
+    const btn = document.getElementById(btnId);
+    const origLabel = btn ? btn.textContent : null;
     if (btn) { btn.disabled = true; btn.textContent = 'Calculando...'; }
     try {
       const preview = await API.get(`/estoque/${id}/pedido-preview`);
@@ -435,8 +443,13 @@ const Estoque = {
     } catch (err) {
       toast(err.message, 'error');
     } finally {
-      if (btn) { btn.disabled = false; btn.textContent = '📋 Criar Pedido'; }
+      if (btn) { btn.disabled = false; btn.textContent = origLabel; }
     }
+  },
+
+  // Botão "Pedir" da listagem (linha da contagem, sem abrir a tela de edição).
+  _pedirFromList(id) {
+    this._openPedidoPreview(id, { btnId: `est-list-pedir-${id}`, returnTo: 'list' });
   },
 
   _pedidoWarnings(preview) {
@@ -558,7 +571,8 @@ const Estoque = {
       createdIds.forEach((id, idx) => {
         setTimeout(() => window.open(`/api/orders/${id}/pdf?token=${API.token}`, '_blank'), 400 * idx);
       });
-      this.openEdit(this._currentListId);
+      if (this._pedidoReturnTo === 'list') this.load();
+      else this.openEdit(this._currentListId);
     } catch (err) {
       toast(err.message, 'error');
       if (btn) { btn.disabled = false; btn.textContent = 'Confirmar e Criar Pedido(s)'; }
@@ -570,6 +584,7 @@ const Estoque = {
     try {
       const orders = await API.get(`/orders?stock_list_id=${listId}`);
       if (!orders || !orders.length) { toast('Nenhum pedido encontrado para esta lista', 'warning'); return; }
+      if (orders.length === 1) { Orders.viewPDF(orders[0].id); return; }
       const rows = orders.map(o => `
         <tr>
           <td><span class="badge badge-gold">#${String(o.id).padStart(6, '0')}</span></td>
