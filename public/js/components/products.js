@@ -242,7 +242,7 @@ const Products = {
             : `<div class="table-wrap"><table>
               <thead><tr><th>Produto</th><th>Categoria</th><th>Unidade</th><th>Fornecedores</th><th>${companyId ? 'Preço' : 'Menor Preço'}${companyId
                 ? ` <span style="font-weight:400;color:var(--gray)">(${escHtml(this.companies.find(c => String(c.id) === String(companyId))?.name || '')})</span>`
-                : churrId ? ` <span style="font-weight:400;color:var(--gray)">(${escHtml(this.churrascarias.find(ch => String(ch.id) === String(churrId))?.name || '')})</span>` : ''}</th><th>Atualização</th><th>Ações</th></tr></thead>
+                : churrId ? ` <span style="font-weight:400;color:var(--gray)">(${escHtml(this.churrascarias.find(ch => String(ch.id) === String(churrId))?.name || '')})</span>` : ''}</th><th>Atualização</th><th>Estoque Máx</th><th>Ações</th></tr></thead>
               <tbody>${products.map(p => `<tr>
                 <td>
                   <strong>${escHtml(p.name)}</strong>
@@ -266,6 +266,11 @@ const Products = {
                      <div style="font-size:11px;color:var(--gray);margin-top:2px">${escHtml(p.min_price_company||'')}</div>`
                   : '<span class="text-gray" style="font-size:13px">—</span>'}</td>
                 <td>${Products.fmtDaysAgo(p.min_price_updated_at)}</td>
+                <td>${(() => {
+                  const targets = (p.stock_targets || []).filter(t => t.ideal_qty !== null && t.ideal_qty !== undefined);
+                  if (!targets.length) return '<span class="text-gray" style="font-size:13px">—</span>';
+                  return targets.map(t => `<div style="font-size:12px;color:var(--white);line-height:1.6">${churrId ? '' : `🔥 ${escHtml(t.churrascaria_name)}: `}${fmtQty(t.ideal_qty)}</div>`).join('');
+                })()}</td>
                 <td>
                   ${App.canDo('manage_products') ? `
                   <div class="flex flex-gap">

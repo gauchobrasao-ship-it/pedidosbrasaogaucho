@@ -59,18 +59,28 @@ router.get('/', authMiddleware, async (req, res) => {
       JOIN companies co ON co.id = cp.company_id AND co.active = 1
       WHERE cp.active = 1 AND cp.price > 0${churrFilter}${priceCompanyFilter}
       ORDER BY cp.product_id, cp.price ASC
+    ),
+    stock_target_stats AS (
+      SELECT pst.product_id,
+             json_agg(json_build_object('churrascaria_id', pst.churrascaria_id, 'churrascaria_name', ch.name, 'ideal_qty', pst.ideal_qty) ORDER BY ch.name) as stock_targets
+      FROM product_stock_targets pst
+      JOIN churrascarias ch ON ch.id = pst.churrascaria_id
+      WHERE 1=1${churrFilter.replace(/cp\./g, 'pst.')}
+      GROUP BY pst.product_id
     )
     SELECT p.id, p.name, p.brand, p.unit, p.category_id,
            cat.name as category_name, cat.color as category_color,
            COALESCE(ls.company_count, 0) as company_count,
            ps.min_price, ls.company_names,
            mr.min_price_company, mr.min_price_updated_at,
-           mr.min_bulk_price, mr.min_bulk_min_qty
+           mr.min_bulk_price, mr.min_bulk_min_qty,
+           sts.stock_targets
     FROM products p
     LEFT JOIN categories cat ON cat.id = p.category_id
     LEFT JOIN link_stats ls ON ls.product_id = p.id
     LEFT JOIN price_stats ps ON ps.product_id = p.id
     LEFT JOIN min_price_row mr ON mr.product_id = p.id
+    LEFT JOIN stock_target_stats sts ON sts.product_id = p.id
     ${productFilter}
     ORDER BY p.name
   `;
