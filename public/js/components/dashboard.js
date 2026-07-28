@@ -167,14 +167,12 @@ const Dashboard = {
             grid: { color: 'rgba(255,255,255,0.04)' },
             ticks: { color: '#888', precision: 0, font: { size: 11 } },
             beginAtZero: true,
-            title: { display: true, text: 'Pedidos', color: '#888', font: { size: 10 } }
           },
           y2: {
             position: 'right',
             grid: { drawOnChartArea: false },
             ticks: { color: '#D4AF37', font: { size: 10 }, callback: v => 'R$' + v.toLocaleString('pt-BR') },
             beginAtZero: true,
-            title: { display: true, text: 'Valor', color: '#D4AF37', font: { size: 10 } }
           }
         }
       }

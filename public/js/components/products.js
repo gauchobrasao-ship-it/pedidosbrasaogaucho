@@ -173,7 +173,7 @@ const Products = {
           <div class="card-header">
             <span class="card-title">Produtos</span>
             ${App.canDo('manage_products') ? `
-              <div style="display:flex;gap:8px">
+              <div style="display:flex;gap:8px;flex-wrap:wrap">
                 <button class="btn btn-outline" onclick="Products.openBulkAssign()">⚡ Edição em massa</button>
                 <button class="btn btn-primary" onclick="Products.openForm()">+ Novo Produto</button>
               </div>` : ''}
@@ -411,7 +411,7 @@ const Products = {
        </div>
        <div class="form-group" style="margin-top:4px">
          <label class="form-label">Fornecedores por Churrascaria</label>
-         <div style="border:1px solid var(--border);border-radius:8px;max-height:240px;overflow-y:auto;background:var(--bg2)">
+         <div style="border:1px solid var(--border);border-radius:8px;max-height:240px;overflow:auto;background:var(--bg2)">
            ${companyList}
          </div>
          <div style="font-size:11px;color:var(--gray);margin-top:4px">

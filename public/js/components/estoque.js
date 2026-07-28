@@ -267,7 +267,7 @@ const Estoque = {
               ${lista.churrascaria_name ? ` &nbsp;·&nbsp; 🔥 ${escHtml(lista.churrascaria_name)}` : ''}
             </div>
           </div>
-          <div style="display:flex;align-items:center;gap:12px">
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;justify-content:flex-end">
             <div style="text-align:right">
               <div style="font-size:13px;color:var(--gold);font-weight:600">${filled}/${items.length} preenchidos</div>
               <div style="font-size:11px;color:var(--gray)">${pct}% completo</div>

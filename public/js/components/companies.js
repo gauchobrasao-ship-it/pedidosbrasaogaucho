@@ -153,8 +153,8 @@ const Companies = {
       <div style="font-weight:700;color:var(--gold);margin-bottom:8px">
         Vincular produto em <span style="color:var(--orange)">${escHtml(churr.name)}</span>
       </div>
-      <div class="flex flex-gap">
-        <select id="add-product-sel" class="form-control">
+      <div class="flex flex-gap" style="flex-wrap:wrap">
+        <select id="add-product-sel" class="form-control" style="flex:1;min-width:160px">
           <option value="">Selecione um produto...</option>
           ${available.map(p => `<option value="${p.id}">${escHtml(p.name)} (${escHtml(p.unit||'un')})</option>`).join('')}
         </select>
