@@ -62,7 +62,7 @@ router.get('/', authMiddleware, async (req, res) => {
     ),
     stock_target_stats AS (
       SELECT pst.product_id,
-             json_agg(json_build_object('churrascaria_id', pst.churrascaria_id, 'churrascaria_name', ch.name, 'ideal_qty', pst.ideal_qty) ORDER BY ch.name) as stock_targets
+             json_agg(json_build_object('churrascaria_id', pst.churrascaria_id, 'churrascaria_name', ch.name, 'ideal_qty', pst.ideal_qty, 'on_demand', pst.on_demand) ORDER BY ch.name) as stock_targets
       FROM product_stock_targets pst
       JOIN churrascarias ch ON ch.id = pst.churrascaria_id
       WHERE 1=1${churrFilter.replace(/cp\./g, 'pst.')}
@@ -106,6 +106,23 @@ router.post('/', authMiddleware, requirePermission('manage_products'), async (re
       [name.trim(), category_id || null, unit || 'un', brand || null]
     );
     res.json({ id: rows[0].id, name, category_id, unit: unit || 'un', brand: brand || null });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
+router.put('/bulk-unit', authMiddleware, requirePermission('manage_products'), async (req, res) => {
+  const { product_ids, unit } = req.body;
+  const ids = [...new Set((product_ids || []).map(Number).filter(Boolean))];
+  if (!ids.length) return res.status(400).json({ error: 'Selecione ao menos um produto' });
+  if (!unit) return res.status(400).json({ error: 'Selecione a unidade' });
+  try {
+    const { rows } = await pool.query(
+      'UPDATE products SET unit = $1 WHERE id = ANY($2::int[]) AND active = 1 RETURNING id',
+      [unit, ids]
+    );
+    res.json({ affected: rows.length });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Erro interno' });
@@ -251,7 +268,7 @@ router.get('/:id', authMiddleware, async (req, res) => {
 router.get('/:id/stock-targets', authMiddleware, async (req, res) => {
   try {
     const { rows } = await pool.query(
-      'SELECT churrascaria_id, ideal_qty FROM product_stock_targets WHERE product_id = $1',
+      'SELECT churrascaria_id, ideal_qty, on_demand FROM product_stock_targets WHERE product_id = $1',
       [req.params.id]
     );
     res.json(rows);
@@ -266,20 +283,21 @@ router.put('/:id/stock-targets', authMiddleware, requirePermission('manage_produ
   const targets = req.body.targets || [];
   try {
     const ops = targets.map(t => {
-      const ideal = t.ideal_qty === '' || t.ideal_qty === null || t.ideal_qty === undefined
-        ? null : parseFloat(t.ideal_qty);
-      if (ideal === null || isNaN(ideal)) {
+      const raw = String(t.ideal_qty ?? '').trim();
+      const onDemand = /^s\s*\/?\s*d$/i.test(raw);
+      const ideal = onDemand || raw === '' ? null : parseFloat(raw);
+      if (!onDemand && (ideal === null || isNaN(ideal))) {
         return pool.query(
           'DELETE FROM product_stock_targets WHERE product_id = $1 AND churrascaria_id = $2',
           [productId, t.churrascaria_id]
         );
       }
       return pool.query(`
-        INSERT INTO product_stock_targets (product_id, churrascaria_id, ideal_qty)
-        VALUES ($1, $2, $3)
+        INSERT INTO product_stock_targets (product_id, churrascaria_id, ideal_qty, on_demand)
+        VALUES ($1, $2, $3, $4)
         ON CONFLICT (product_id, churrascaria_id)
-        DO UPDATE SET ideal_qty = EXCLUDED.ideal_qty, updated_at = NOW()
-      `, [productId, t.churrascaria_id, ideal]);
+        DO UPDATE SET ideal_qty = EXCLUDED.ideal_qty, on_demand = EXCLUDED.on_demand, updated_at = NOW()
+      `, [productId, t.churrascaria_id, ideal, onDemand]);
     });
     await Promise.all(ops);
     res.json({ message: 'Estoque ideal atualizado' });

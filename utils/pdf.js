@@ -93,8 +93,9 @@ function generateOrderPDF(order) {
     const bg = rowIdx % 2 === 0 ? COLORS.white : COLORS.rowAlt;
     doc.rect(MARGIN, y, CONTENT_W, 20).fill(bg);
 
+    const productLabel = item.note ? `${item.product_name} (${item.note})` : item.product_name;
     doc.fillColor(COLORS.dark).fontSize(8.5).font('Helvetica')
-      .text(item.product_name, cols.product + 8, y + 6, { width: 183, ellipsis: true })
+      .text(productLabel, cols.product + 8, y + 6, { width: 183, ellipsis: true })
       .text(item.category_name || '-', cols.category, y + 6, { width: 120 })
       .text(item.unit || '-', cols.unit, y + 6, { width: 30 })
       .text(String(item.quantity).replace('.', ','), cols.qty, y + 6, { width: 40 })

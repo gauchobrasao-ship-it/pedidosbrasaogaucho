@@ -11,6 +11,8 @@ const Products = {
   lastLinkedCompanies: [],
   _cache: { data: null, ts: 0 },
   _CACHE_TTL: 60000,
+  UNITS: ['un','kg','g','cx','lt','ml','pc','saco','fardo','bd'],
+  _bulkTab: 'assign',
 
   async _loadFormData() {
     const now = Date.now();
@@ -267,9 +269,9 @@ const Products = {
                   : '<span class="text-gray" style="font-size:13px">—</span>'}</td>
                 <td>${Products.fmtDaysAgo(p.min_price_updated_at)}</td>
                 <td>${(() => {
-                  const targets = (p.stock_targets || []).filter(t => t.ideal_qty !== null && t.ideal_qty !== undefined);
+                  const targets = (p.stock_targets || []).filter(t => t.on_demand || (t.ideal_qty !== null && t.ideal_qty !== undefined));
                   if (!targets.length) return '<span class="text-gray" style="font-size:13px">—</span>';
-                  return targets.map(t => `<div style="font-size:12px;color:var(--white);line-height:1.6">${churrId ? '' : `🔥 ${escHtml(t.churrascaria_name)}: `}${fmtQty(t.ideal_qty)}</div>`).join('');
+                  return targets.map(t => `<div style="font-size:12px;color:var(--white);line-height:1.6">${churrId ? '' : `🔥 ${escHtml(t.churrascaria_name)}: `}${t.on_demand ? '<span style="color:var(--orange);font-weight:600">S/D</span>' : fmtQty(t.ideal_qty)}</div>`).join('');
                 })()}</td>
                 <td>
                   ${App.canDo('manage_products') ? `
@@ -318,7 +320,7 @@ const Products = {
       this.linkedCompanies = this.lastLinkedCompanies;
     }
     const targetsMap = {};
-    stockTargets.forEach(t => { targetsMap[t.churrascaria_id] = t.ideal_qty; });
+    stockTargets.forEach(t => { targetsMap[t.churrascaria_id] = t; });
 
     // Build map: { company_id: { churrascaria_id: price } }
     const linkedMap = {};
@@ -329,7 +331,7 @@ const Products = {
 
     const selCat  = id ? product.category_id : (defaultCatId !== undefined ? defaultCatId : this.lastCategoryId);
     const selUnit = id ? (product.unit || 'un') : (defaultUnit !== undefined ? defaultUnit : this.lastUnit);
-    const units = ['un','kg','g','cx','lt','ml','pc','saco','fardo','bd'];
+    const units = this.UNITS;
     const isNew = !id;
 
     const companyList = this.companies.length === 0
@@ -424,15 +426,16 @@ const Products = {
            ${this.churrascarias.map(ch => `
              <div style="flex:1;min-width:140px">
                <label style="font-size:12px;color:var(--gray);display:block;margin-bottom:4px">🔥 ${escHtml(ch.name)}</label>
-               <input type="number" step="0.001" min="0" class="form-control pf-stock-target"
+               <input type="text" class="form-control pf-stock-target"
                  data-churr-id="${ch.id}"
-                 value="${targetsMap[ch.id] !== undefined && targetsMap[ch.id] !== null ? fmtQty(targetsMap[ch.id]) : ''}"
+                 value="${targetsMap[ch.id]?.on_demand ? 'SD' : (targetsMap[ch.id]?.ideal_qty !== undefined && targetsMap[ch.id]?.ideal_qty !== null ? fmtQty(targetsMap[ch.id].ideal_qty) : '')}"
                  placeholder="Sem meta"
                  style="padding:6px 10px;font-size:13px">
              </div>`).join('')}
          </div>
          <div style="font-size:11px;color:var(--gray);margin-top:4px">
            Quantidade máxima que deve ter no estoque até o próximo pedido — usada pra calcular o pedido automático na aba Estoque.
+           Digite <strong>SD</strong> pra marcar como "sob demanda" (sem meta fixa — entra no pedido pra preenchimento manual da quantidade).
          </div>
        </div>`,
       `<button class="btn btn-outline" onclick="closeModal()">Cancelar</button>
@@ -569,11 +572,23 @@ const Products = {
   },
 
   async openBulkAssign() {
-    const { cats, companies, churrs } = await this._loadFormData();
+    this._bulkTab = 'assign';
+    this._bulkFormData = await this._loadFormData();
+    this._renderBulkModal();
+  },
 
-    showModal(
-      '⚡ Edição em Massa — Vincular Fornecedor',
-      `<div style="font-size:13px;color:var(--gray);margin-bottom:16px;line-height:1.6">
+  _switchBulkTab(tab) {
+    this._bulkTab = tab;
+    this._renderBulkModal();
+  },
+
+  _renderBulkModal() {
+    const { cats, companies, churrs } = this._bulkFormData;
+    const tabBtn = (tab, label) =>
+      `<button type="button" class="btn btn-sm ${this._bulkTab === tab ? 'btn-gold' : 'btn-outline'}" onclick="Products._switchBulkTab('${tab}')">${label}</button>`;
+
+    const assignBody = `
+       <div style="font-size:13px;color:var(--gray);margin-bottom:16px;line-height:1.6">
          Selecione uma categoria, um fornecedor e as churrascarias.<br>
          O fornecedor será adicionado a <strong style="color:var(--white)">todos os produtos</strong> da categoria selecionada.<br>
          Vínculos existentes não serão alterados.
@@ -604,10 +619,94 @@ const Products = {
              </label>`).join('')}
          </div>
        </div>
-       <div id="ba-preview" style="margin-top:4px"></div>`,
-      `<button class="btn btn-outline" onclick="closeModal()">Cancelar</button>
-       <button class="btn btn-primary" onclick="Products.bulkAssign()">Vincular</button>`
+       <div id="ba-preview" style="margin-top:4px"></div>`;
+
+    const unitBody = `
+       <div style="font-size:13px;color:var(--gray);margin-bottom:16px;line-height:1.6">
+         Selecione um fornecedor pra ver os produtos vinculados a ele, marque os que quer alterar e escolha a nova unidade.
+       </div>
+       <div class="form-group">
+         <label class="form-label">Fornecedor *</label>
+         <select class="form-control" id="bu-company" onchange="Products._bulkUnitLoadProducts()">
+           <option value="">Selecione um fornecedor...</option>
+           ${companies.map(c => `<option value="${c.id}">${escHtml(c.name)}</option>`).join('')}
+         </select>
+       </div>
+       <div id="bu-products"></div>`;
+
+    const footer = this._bulkTab === 'assign'
+      ? `<button class="btn btn-outline" onclick="closeModal()">Cancelar</button>
+         <button class="btn btn-primary" onclick="Products.bulkAssign()">Vincular</button>`
+      : `<button class="btn btn-outline" onclick="closeModal()">Cancelar</button>
+         <button class="btn btn-primary" onclick="Products.bulkUnitSave()">Salvar Unidade</button>`;
+
+    showModal(
+      '⚡ Edição em Massa',
+      `<div style="display:flex;gap:8px;margin-bottom:16px">${tabBtn('assign', 'Vincular Fornecedor')}${tabBtn('unit', 'Alterar Unidade')}</div>
+       ${this._bulkTab === 'assign' ? assignBody : unitBody}`,
+      footer
     );
+  },
+
+  async _bulkUnitLoadProducts() {
+    const companyId = document.getElementById('bu-company').value;
+    const el = document.getElementById('bu-products');
+    if (!companyId) { el.innerHTML = ''; return; }
+    el.innerHTML = `<div style="padding:12px;color:var(--gray);font-size:13px">Carregando...</div>`;
+    try {
+      const products = await API.get('/products?' + new URLSearchParams({ company_id: companyId }));
+      if (!products || !products.length) {
+        el.innerHTML = `<div style="padding:12px;color:var(--gray);font-size:13px">Nenhum produto vinculado a este fornecedor.</div>`;
+        return;
+      }
+      el.innerHTML = `
+        <div class="form-group">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+            <label class="form-label" style="margin:0">Produtos (${products.length})</label>
+            <button type="button" class="btn btn-outline btn-sm" onclick="Products._bulkUnitToggleAll()">Marcar todos</button>
+          </div>
+          <div style="border:1px solid var(--border);border-radius:8px;max-height:240px;overflow:auto;background:var(--bg2)">
+            ${products.map(p => `
+              <label style="display:flex;align-items:center;gap:10px;padding:8px 12px;cursor:pointer;font-size:13px;color:var(--white);border-bottom:1px solid var(--border)">
+                <input type="checkbox" class="bu-product-cb" value="${p.id}"
+                  style="width:16px;height:16px;accent-color:var(--orange);cursor:pointer">
+                ${escHtml(p.name)} <span style="color:var(--gray)">(${escHtml(p.unit || 'un')})</span>
+              </label>`).join('')}
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Nova unidade *</label>
+          <select class="form-control" id="bu-unit">
+            ${this.UNITS.map(u => `<option>${u}</option>`).join('')}
+          </select>
+        </div>`;
+    } catch (err) {
+      el.innerHTML = `<div class="text-danger" style="font-size:13px">${err.message}</div>`;
+    }
+  },
+
+  _bulkUnitToggleAll() {
+    const cbs = [...document.querySelectorAll('.bu-product-cb')];
+    const allChecked = cbs.length > 0 && cbs.every(cb => cb.checked);
+    cbs.forEach(cb => { cb.checked = !allChecked; });
+  },
+
+  async bulkUnitSave() {
+    const ids = [...document.querySelectorAll('.bu-product-cb:checked')].map(cb => Number(cb.value));
+    const unit = document.getElementById('bu-unit')?.value;
+    if (!ids.length) { toast('Selecione pelo menos um produto', 'error'); return; }
+    if (!unit) { toast('Selecione a unidade', 'error'); return; }
+    try {
+      const result = await API.put('/products/bulk-unit', { product_ids: ids, unit });
+      closeModal();
+      toast(`Unidade atualizada em ${result.affected} produto${result.affected !== 1 ? 's' : ''}!`);
+      this.load(
+        document.getElementById('prod-search')?.value || '',
+        this._getCatIds(),
+        document.getElementById('prod-filter-company')?.value || '',
+        this._getChurrId()
+      );
+    } catch (err) { toast(err.message, 'error'); }
   },
 
   async _bulkPreview() {

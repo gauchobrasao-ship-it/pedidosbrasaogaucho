@@ -48,7 +48,7 @@ router.get('/:id', async (req, res) => {
         SELECT sli.id, sli.product_id, sli.quantity, sli.notes,
                p.name as product_name, p.unit,
                cat.name as category_name, cat.color as category_color,
-               pst.ideal_qty
+               pst.ideal_qty, pst.on_demand
         FROM stock_list_items sli
         JOIN products p ON p.id = sli.product_id
         LEFT JOIN categories cat ON cat.id = p.category_id
@@ -92,7 +92,7 @@ router.get('/:id/pedido-preview', async (req, res) => {
     const { rows } = await pool.query(`
       WITH itens AS (
         SELECT sli.product_id, sli.quantity AS atual, p.name, p.unit,
-               pst.ideal_qty
+               pst.ideal_qty, pst.on_demand
         FROM stock_list_items sli
         JOIN products p ON p.id = sli.product_id
         LEFT JOIN product_stock_targets pst ON pst.product_id = sli.product_id AND pst.churrascaria_id = $2
@@ -107,7 +107,7 @@ router.get('/:id/pedido-preview', async (req, res) => {
           AND ($3::int IS NULL OR cp.company_id = $3)
         ORDER BY cp.product_id, (cp.price > 0) DESC, cp.price ASC
       )
-      SELECT i.product_id, i.name, i.unit, i.atual, i.ideal_qty,
+      SELECT i.product_id, i.name, i.unit, i.atual, i.ideal_qty, i.on_demand,
              f.company_id, f.company_name, f.price
       FROM itens i
       LEFT JOIN fornecedor f ON f.product_id = i.product_id
@@ -119,6 +119,17 @@ router.get('/:id/pedido-preview', async (req, res) => {
 
     for (const r of rows) {
       const base = { product_id: r.product_id, name: r.name, unit: r.unit };
+      if (r.on_demand) {
+        if (!r.company_id) { sem_fornecedor.push({ ...base, needed_qty: null, on_demand: true }); continue; }
+        if (!groupsMap.has(r.company_id)) {
+          groupsMap.set(r.company_id, { company_id: r.company_id, company_name: r.company_name, items: [] });
+        }
+        groupsMap.get(r.company_id).items.push({
+          product_id: r.product_id, name: r.name, unit: r.unit,
+          needed_qty: null, on_demand: true, price: parseFloat(r.price)
+        });
+        continue;
+      }
       if (r.ideal_qty === null) { sem_meta.push(base); continue; }
       if (r.atual === null) { nao_contado.push(base); continue; }
       const needed = Math.max(0, parseFloat(r.ideal_qty) - parseFloat(r.atual));

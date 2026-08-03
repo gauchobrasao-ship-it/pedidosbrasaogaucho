@@ -100,11 +100,11 @@ router.post('/', authMiddleware, requirePermission('create_orders'), async (req,
         const qty = parseFloat(item.quantity);
         const price = parseFloat(item.unit_price || 0);
         const base = itemParams.length;
-        itemPlaceholders.push(`($1,$${base+1},$${base+2},$${base+3},$${base+4})`);
-        itemParams.push(item.product_id, qty, price, qty * price);
+        itemPlaceholders.push(`($1,$${base+1},$${base+2},$${base+3},$${base+4},$${base+5})`);
+        itemParams.push(item.product_id, qty, price, qty * price, item.note || null);
       }
       await client.query(
-        `INSERT INTO order_items (order_id, product_id, quantity, unit_price, subtotal) VALUES ${itemPlaceholders.join(',')}`,
+        `INSERT INTO order_items (order_id, product_id, quantity, unit_price, subtotal, note) VALUES ${itemPlaceholders.join(',')}`,
         itemParams
       );
 

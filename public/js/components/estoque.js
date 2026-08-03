@@ -302,7 +302,7 @@ const Estoque = {
                     ${group.items.map(item => `<tr>
                       <td><strong style="font-size:13px">${escHtml(item.product_name)}</strong></td>
                       <td><span class="badge badge-gray">${escHtml(item.unit || 'un')}</span></td>
-                      <td style="font-size:13px;color:var(--gray)">${item.ideal_qty !== null && item.ideal_qty !== undefined ? fmtQty(item.ideal_qty) : '—'}</td>
+                      <td style="font-size:13px;color:var(--gray)">${item.on_demand ? '<span style="color:var(--orange);font-weight:600">S/D</span>' : (item.ideal_qty !== null && item.ideal_qty !== undefined ? fmtQty(item.ideal_qty) : '—')}</td>
                       <td>
                         <input type="number" step="0.001" min="0"
                           id="est-qty-${item.product_id}"
@@ -480,7 +480,7 @@ const Estoque = {
     }
 
     const groupsHtml = groups.map((g, gi) => {
-      const subtotal = g.items.reduce((s, it) => s + it.needed_qty * (it.price || 0), 0);
+      const subtotal = g.items.reduce((s, it) => s + (it.needed_qty || 0) * (it.price || 0), 0);
       return `
       <div style="margin-bottom:20px">
         <div style="font-weight:700;font-size:14px;color:var(--gold);border-bottom:1px solid var(--border);padding-bottom:6px;margin-bottom:8px">
@@ -488,23 +488,28 @@ const Estoque = {
         </div>
         <div class="table-wrap">
           <table>
-            <thead><tr><th>Produto</th><th>UN</th><th style="width:100px">Qtd</th><th style="width:110px">Preço Unit.</th><th style="width:100px">Subtotal</th></tr></thead>
+            <thead><tr><th>Produto</th><th>UN</th><th style="width:100px">Qtd</th><th style="width:110px">Preço Unit.</th><th style="width:100px">Subtotal</th><th style="width:140px">Obs.</th></tr></thead>
             <tbody>
               ${g.items.map(it => `<tr>
-                <td style="font-weight:600">${escHtml(it.name)}</td>
+                <td style="font-weight:600">${escHtml(it.name)}${it.on_demand ? ' <span class="badge" style="background:#E0782022;color:var(--orange);border-color:#E0782044;font-size:10px">S/D</span>' : ''}</td>
                 <td><span class="badge badge-gray">${escHtml(it.unit||'un')}</span></td>
                 <td><input type="number" step="0.001" min="0" class="form-control"
-                      id="pp-qty-${gi}-${it.product_id}" value="${it.needed_qty}"
-                      style="width:90px" oninput="Estoque._recalcPedidoPreview(${gi})"></td>
+                      id="pp-qty-${gi}-${it.product_id}" value="${it.on_demand ? '' : it.needed_qty}"
+                      placeholder="${it.on_demand ? 'Obrigatório' : ''}"
+                      style="width:90px${it.on_demand ? ';border-color:var(--orange)' : ''}" oninput="Estoque._recalcPedidoPreview(${gi})"></td>
                 <td><input type="number" step="0.01" min="0" class="form-control"
                       id="pp-price-${gi}-${it.product_id}" value="${Number(it.price||0).toFixed(2)}"
                       style="width:100px" oninput="Estoque._recalcPedidoPreview(${gi})"></td>
-                <td class="text-gold" id="pp-sub-${gi}-${it.product_id}">${fmtMoney(it.needed_qty*(it.price||0))}</td>
+                <td class="text-gold" id="pp-sub-${gi}-${it.product_id}">${fmtMoney((it.needed_qty||0)*(it.price||0))}</td>
+                <td><input type="text" class="form-control"
+                      id="pp-note-${gi}-${it.product_id}" placeholder="${it.on_demand ? 'ex: 1 palet' : 'opcional'}"
+                      style="width:130px;font-size:12px"></td>
               </tr>`).join('')}
             </tbody>
             <tfoot>
               <tr><td colspan="4" style="text-align:right;font-weight:700;font-size:13px">Subtotal:</td>
-                <td style="text-align:right;font-weight:700;color:var(--gold)" id="pp-group-total-${gi}">${fmtMoney(subtotal)}</td></tr>
+                <td style="text-align:right;font-weight:700;color:var(--gold)" id="pp-group-total-${gi}">${fmtMoney(subtotal)}</td>
+                <td></td></tr>
             </tfoot>
           </table>
         </div>
@@ -542,6 +547,22 @@ const Estoque = {
   async _confirmarPedidos() {
     const preview = this._pedidoPreview;
     if (!preview) return;
+
+    // Itens sob demanda não têm quantidade calculada — exige preenchimento manual
+    // antes de deixar confirmar, senão o pedido sairia sem esse produto.
+    const missing = [];
+    preview.groups.forEach((g, gi) => {
+      g.items.forEach(it => {
+        if (!it.on_demand) return;
+        const val = parseFloat(document.getElementById(`pp-qty-${gi}-${it.product_id}`)?.value);
+        if (!val || val <= 0) missing.push(it.name);
+      });
+    });
+    if (missing.length) {
+      toast(`Preencha a quantidade dos itens sob demanda: ${missing.join(', ')}`, 'error');
+      return;
+    }
+
     const btn = document.getElementById('pp-confirm-btn');
     if (btn) { btn.disabled = true; btn.textContent = 'Criando...'; }
     const createdIds = [];
@@ -551,7 +572,8 @@ const Estoque = {
         const items = g.items.map(it => {
           const quantity = parseFloat(document.getElementById(`pp-qty-${gi}-${it.product_id}`)?.value || 0);
           const unit_price = parseFloat(document.getElementById(`pp-price-${gi}-${it.product_id}`)?.value || 0);
-          return { product_id: it.product_id, quantity, unit_price };
+          const note = document.getElementById(`pp-note-${gi}-${it.product_id}`)?.value.trim() || null;
+          return { product_id: it.product_id, quantity, unit_price, note };
         }).filter(i => i.quantity > 0);
         if (!items.length) continue;
         const result = await API.post('/orders', {
