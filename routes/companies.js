@@ -15,7 +15,7 @@ router.get('/', authMiddleware, async (req, res) => {
   `;
   if (search) {
     params.push(`%${search}%`);
-    query += ` AND c.name ILIKE $${params.length}`;
+    query += ` AND unaccent(c.name) ILIKE unaccent($${params.length})`;
   }
   query += ' GROUP BY c.id ORDER BY c.name';
   try {

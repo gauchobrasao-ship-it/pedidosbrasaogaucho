@@ -12,7 +12,7 @@ router.get('/', authMiddleware, async (req, res) => {
   let productFilter = 'WHERE p.active = 1';
   if (search) {
     params.push(`%${search}%`);
-    productFilter += ` AND (p.name ILIKE $${params.length} OR cat.name ILIKE $${params.length})`;
+    productFilter += ` AND (unaccent(p.name) ILIKE unaccent($${params.length}) OR unaccent(cat.name) ILIKE unaccent($${params.length}))`;
   }
   if (category_ids) {
     const ids = category_ids.split(',').map(Number).filter(Boolean);
