@@ -137,11 +137,22 @@ router.put('/:id', authMiddleware, requirePermission('manage_products'), async (
         'SELECT id FROM products WHERE LOWER(name) = LOWER($1) AND active = 1 AND id <> $2', [name.trim(), req.params.id]
       );
       if (dup.length) return res.status(400).json({ error: 'Produto já cadastrado com este nome' });
-      await pool.query('UPDATE products SET name = $1 WHERE id = $2', [name, req.params.id]);
     }
-    if (category_id !== undefined) await pool.query('UPDATE products SET category_id = $1 WHERE id = $2', [category_id, req.params.id]);
-    if (unit !== undefined) await pool.query('UPDATE products SET unit = $1 WHERE id = $2', [unit, req.params.id]);
-    if (brand !== undefined) await pool.query('UPDATE products SET brand = $1 WHERE id = $2', [brand || null, req.params.id]);
+    await pool.query(
+      `UPDATE products SET
+         name = COALESCE($1, name),
+         category_id = CASE WHEN $2 THEN $3 ELSE category_id END,
+         unit = COALESCE($4, unit),
+         brand = CASE WHEN $5 THEN $6 ELSE brand END
+       WHERE id = $7`,
+      [
+        name !== undefined ? name : null,
+        category_id !== undefined, category_id,
+        unit !== undefined ? unit : null,
+        brand !== undefined, brand || null,
+        req.params.id,
+      ]
+    );
     res.json({ message: 'Produto atualizado' });
   } catch (err) {
     console.error(err);
