@@ -555,16 +555,19 @@ const PriceRequest = {
         </div>
         ${suppliers.map(s => `
           <div id="prc-card-${s.company_id}" style="background:var(--card2);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:10px">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:10px">
-              <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;cursor:pointer" onclick="PriceRequest._toggleExpand(${s.company_id})">
+              <label style="display:flex;align-items:center;gap:10px;cursor:pointer" onclick="event.stopPropagation()">
                 <input type="checkbox" class="prc-company-ck" data-company="${s.company_id}" checked
                   onchange="PriceRequest._toggleCompany(${s.company_id}, this.checked)"
                   style="accent-color:var(--gold);width:17px;height:17px;flex-shrink:0">
                 <span style="font-weight:700;color:var(--gold)">${escHtml(s.company_name)}</span>
               </label>
-              <span style="font-size:11px;color:var(--gray);white-space:nowrap">${s.products.length} produto(s)</span>
+              <span style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--gray);white-space:nowrap">
+                ${s.products.length} produto(s)
+                <span id="prc-chevron-${s.company_id}" style="transition:transform .15s;display:inline-block">▸</span>
+              </span>
             </div>
-            <div id="prc-products-${s.company_id}">
+            <div id="prc-products-${s.company_id}" style="display:none;margin-top:10px">
               ${s.products.map(p => `
                 <div class="product-order-row">
                   <div style="display:flex;align-items:center;gap:10px">
@@ -597,6 +600,15 @@ const PriceRequest = {
       products.style.opacity = checked ? '1' : '0.4';
       products.style.pointerEvents = checked ? 'auto' : 'none';
     }
+  },
+
+  _toggleExpand(companyId) {
+    const products = document.getElementById(`prc-products-${companyId}`);
+    const chevron = document.getElementById(`prc-chevron-${companyId}`);
+    if (!products) return;
+    const expanded = products.style.display !== 'none';
+    products.style.display = expanded ? 'none' : 'block';
+    if (chevron) chevron.style.transform = expanded ? 'rotate(0deg)' : 'rotate(90deg)';
   },
 
   _commonFields() {
