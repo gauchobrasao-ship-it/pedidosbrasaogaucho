@@ -200,6 +200,42 @@ const App = {
     }
   },
 
+  openChangePassword() {
+    showModal('Alterar Senha', `
+      <div class="form-group">
+        <label class="form-label">Senha atual</label>
+        <input type="password" id="cp-current" class="form-control" autocomplete="current-password">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Nova senha</label>
+        <input type="password" id="cp-new" class="form-control" autocomplete="new-password" placeholder="Mínimo 6 caracteres">
+      </div>
+      <div class="form-group" style="margin-bottom:0">
+        <label class="form-label">Confirmar nova senha</label>
+        <input type="password" id="cp-confirm" class="form-control" autocomplete="new-password">
+      </div>
+    `, `
+      <button class="btn btn-outline" onclick="closeModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="App.submitChangePassword()">Salvar</button>
+    `);
+  },
+
+  async submitChangePassword() {
+    const current = document.getElementById('cp-current').value;
+    const newPass = document.getElementById('cp-new').value;
+    const confirmPass = document.getElementById('cp-confirm').value;
+    if (!current || !newPass || !confirmPass) { toast('Preencha todos os campos', 'error'); return; }
+    if (newPass.length < 6) { toast('A nova senha deve ter pelo menos 6 caracteres', 'error'); return; }
+    if (newPass !== confirmPass) { toast('As senhas não coincidem', 'error'); return; }
+    try {
+      await API.post('/auth/change-password', { current_password: current, new_password: newPass });
+      toast('Senha alterada com sucesso!');
+      closeModal();
+    } catch (err) {
+      toast(err.message, 'error');
+    }
+  },
+
   logout(silent) {
     API.setToken(null);
     this.user = null;

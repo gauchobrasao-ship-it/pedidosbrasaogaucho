@@ -2,7 +2,7 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { pool } = require('../database/db');
-const { authMiddleware, JWT_SECRET } = require('../middleware/auth');
+const { authMiddleware, JWT_SECRET, invalidateUserCache } = require('../middleware/auth');
 
 const router = express.Router();
 
@@ -39,6 +39,30 @@ router.post('/login', async (req, res) => {
 router.get('/me', authMiddleware, (req, res) => {
   const { password_hash, ...user } = req.user;
   res.json(user);
+});
+
+router.post('/change-password', authMiddleware, async (req, res) => {
+  const { current_password, new_password } = req.body;
+  if (!current_password || !new_password) {
+    return res.status(400).json({ error: 'Senha atual e nova senha são obrigatórias' });
+  }
+  if (new_password.length < 6) {
+    return res.status(400).json({ error: 'A nova senha deve ter pelo menos 6 caracteres' });
+  }
+
+  try {
+    const valid = bcrypt.compareSync(current_password, req.user.password_hash);
+    if (!valid) return res.status(401).json({ error: 'Senha atual incorreta' });
+
+    const hash = bcrypt.hashSync(new_password, 10);
+    await pool.query('UPDATE users SET password_hash = $1 WHERE id = $2', [hash, req.user.id]);
+    invalidateUserCache(req.user.id);
+
+    res.json({ message: 'Senha alterada com sucesso' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Erro interno' });
+  }
 });
 
 module.exports = router;
