@@ -284,12 +284,13 @@ const PriceRequest = {
     const el = document.getElementById('section-price-request');
     el.innerHTML = '<div class="empty-state">Carregando...</div>';
     try {
-      const [churrascarias, companies, products] = await Promise.all([
+      const [churrascarias, companies, products, categories] = await Promise.all([
         API.get('/reports/churrascarias'),
         API.get('/companies'),
         API.get('/products'),
+        API.get('/categories'),
       ]);
-      this.state = { churrascarias, companies, products };
+      this.state = { churrascarias, companies, products, categories };
       this._renderStep1();
     } catch (err) {
       el.innerHTML = `<div class="empty-state text-danger">${err.message}</div>`;
@@ -316,16 +317,21 @@ const PriceRequest = {
           </div>
           <div class="form-group" style="margin-bottom:0">
             <label class="form-label">Modo de seleção</label>
-            <div style="display:flex;gap:12px;margin-top:8px">
+            <div style="display:flex;gap:12px;margin-top:8px;flex-wrap:wrap">
               <div id="mode-empresa-card" onclick="PriceRequest._setMode('empresa')"
-                style="flex:1;background:var(--card2);border:2px solid var(--gold);border-radius:10px;padding:14px 16px;cursor:pointer;transition:all .15s">
+                style="flex:1;min-width:160px;background:var(--card2);border:2px solid var(--gold);border-radius:10px;padding:14px 16px;cursor:pointer;transition:all .15s">
                 <div style="font-weight:700;color:var(--gold);margin-bottom:4px">Por Empresa</div>
                 <div style="font-size:12px;color:var(--gray)">Seleciona todos os produtos de um fornecedor</div>
               </div>
               <div id="mode-produto-card" onclick="PriceRequest._setMode('produto')"
-                style="flex:1;background:var(--card2);border:2px solid var(--border);border-radius:10px;padding:14px 16px;cursor:pointer;transition:all .15s">
+                style="flex:1;min-width:160px;background:var(--card2);border:2px solid var(--border);border-radius:10px;padding:14px 16px;cursor:pointer;transition:all .15s">
                 <div id="mode-produto-label" style="font-weight:700;color:var(--gray);margin-bottom:4px">Por Produto</div>
                 <div style="font-size:12px;color:var(--gray)">Escolhe produtos específicos e seleciona fornecedores</div>
+              </div>
+              <div id="mode-categoria-card" onclick="PriceRequest._setMode('categoria')"
+                style="flex:1;min-width:160px;background:var(--card2);border:2px solid var(--border);border-radius:10px;padding:14px 16px;cursor:pointer;transition:all .15s">
+                <div id="mode-categoria-label" style="font-weight:700;color:var(--gray);margin-bottom:4px">Por Categoria</div>
+                <div style="font-size:12px;color:var(--gray)">Um link por fornecedor, com o que ele já vende da categoria</div>
               </div>
             </div>
           </div>
@@ -338,24 +344,27 @@ const PriceRequest = {
 
   _setMode(mode) {
     this._mode = mode;
-    const eCard = document.getElementById('mode-empresa-card');
-    const pCard = document.getElementById('mode-produto-card');
-    const pLabel = document.getElementById('mode-produto-label');
-    if (!eCard) return;
-    if (mode === 'empresa') {
-      eCard.style.border = '2px solid var(--gold)';
-      eCard.querySelector('div').style.color = 'var(--gold)';
-      pCard.style.border = '2px solid var(--border)';
-      pLabel.style.color = 'var(--gray)';
-    } else {
-      pCard.style.border = '2px solid var(--gold)';
-      pLabel.style.color = 'var(--gold)';
-      eCard.style.border = '2px solid var(--border)';
-      eCard.querySelector('div').style.color = 'var(--gray)';
-    }
+    const cards = {
+      empresa: document.getElementById('mode-empresa-card'),
+      produto: document.getElementById('mode-produto-card'),
+      categoria: document.getElementById('mode-categoria-card'),
+    };
+    if (!cards.empresa) return;
+    Object.entries(cards).forEach(([m, card]) => {
+      if (!card) return;
+      const label = card.querySelector('div');
+      if (m === mode) {
+        card.style.border = '2px solid var(--gold)';
+        if (label) label.style.color = 'var(--gold)';
+      } else {
+        card.style.border = '2px solid var(--border)';
+        if (label) label.style.color = 'var(--gray)';
+      }
+    });
     const el = document.getElementById('pr-form-area');
     if (mode === 'empresa') this._renderEmpresaForm(el);
-    else this._renderProdutoForm(el);
+    else if (mode === 'produto') this._renderProdutoForm(el);
+    else this._renderCategoriaForm(el);
   },
 
   _renderEmpresaForm(el) {
@@ -501,6 +510,86 @@ const PriceRequest = {
       </div>`;
   },
 
+  _renderCategoriaForm(el) {
+    const { categories } = this.state;
+    el.innerHTML = `
+      <div class="card">
+        <div class="form-group" style="margin-bottom:0">
+          <label class="form-label">Categoria</label>
+          <select id="pr-category" class="form-control" onchange="PriceRequest._loadCategorySuppliers()">
+            <option value="">Selecione a categoria...</option>
+            ${(categories || []).map(c => `<option value="${c.id}">${escHtml(c.name)}</option>`).join('')}
+          </select>
+        </div>
+        <div id="pr-categoria-suppliers"></div>
+      </div>`;
+  },
+
+  async _loadCategorySuppliers() {
+    const catId = document.getElementById('pr-category')?.value;
+    const churrId = document.getElementById('pr-churr')?.value;
+    const el = document.getElementById('pr-categoria-suppliers');
+    if (!el) return;
+    if (!churrId) {
+      toast('Selecione a churrascaria primeiro', 'error');
+      document.getElementById('pr-category').value = '';
+      el.innerHTML = '';
+      return;
+    }
+    if (!catId) { el.innerHTML = ''; return; }
+
+    el.innerHTML = '<div style="color:var(--gray);font-size:13px;padding:8px 0">Carregando fornecedores...</div>';
+    try {
+      const suppliers = await API.get(`/categories/${catId}/suppliers?churrascaria_id=${churrId}`);
+      this.state._categoria_suppliers = suppliers;
+
+      if (!suppliers.length) {
+        el.innerHTML = '<div class="empty-state" style="padding:20px"><p>Nenhum fornecedor vende produtos desta categoria nesta churrascaria</p></div>';
+        return;
+      }
+
+      el.innerHTML = `
+        <hr class="divider">
+        <div style="font-size:13px;color:var(--gray);margin-bottom:12px">
+          ${suppliers.length} fornecedor(es) encontrado(s) · um link será gerado para cada um, com os produtos que ele já vende
+        </div>
+        ${suppliers.map(s => `
+          <div style="background:var(--card2);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:10px">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:10px">
+              <span style="font-weight:700;color:var(--gold)">${escHtml(s.company_name)}</span>
+              <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--gray);cursor:pointer;white-space:nowrap">
+                <input type="checkbox" checked onchange="PriceRequest._toggleCompanyProducts(${s.company_id}, this.checked)" style="accent-color:var(--gold)">
+                Selecionar todos
+              </label>
+            </div>
+            ${s.products.map(p => `
+              <div class="product-order-row">
+                <div style="display:flex;align-items:center;gap:10px">
+                  <input type="checkbox" class="prc-prod-ck" data-company="${s.company_id}" value="${p.id}" checked
+                    style="accent-color:var(--gold);width:15px;height:15px;flex-shrink:0">
+                  <div>
+                    <div class="product-order-name">${escHtml(p.name)}</div>
+                    <div style="font-size:11px;color:var(--gray)">${escHtml(p.unit || 'un')}${p.brand ? ' · ' + escHtml(p.brand) : ''} · Atual: ${fmtMoney(p.price)}</div>
+                  </div>
+                </div>
+                <div></div>
+                <div>
+                  <input type="number" step="0.5" min="0" class="form-control" style="width:90px"
+                    id="prc-qty-${s.company_id}-${p.id}" value="1" placeholder="Qtd">
+                </div>
+              </div>`).join('')}
+          </div>`).join('')}
+        ${this._commonFields()}
+        <button class="btn btn-primary" onclick="PriceRequest._submitCategoria()">Gerar Links de Cotação →</button>`;
+    } catch (err) {
+      el.innerHTML = `<div class="empty-state text-danger">${err.message}</div>`;
+    }
+  },
+
+  _toggleCompanyProducts(companyId, checked) {
+    document.querySelectorAll(`.prc-prod-ck[data-company="${companyId}"]`).forEach(cb => cb.checked = checked);
+  },
+
   _commonFields() {
     return `
       <div class="form-group">
@@ -548,6 +637,40 @@ const PriceRequest = {
       company_ids: compCks.map(cb => parseInt(cb.value)),
       items
     });
+  },
+
+  async _submitCategoria() {
+    const churrId = document.getElementById('pr-churr')?.value;
+    if (!churrId) { toast('Selecione a churrascaria', 'error'); return; }
+
+    const byCompany = {};
+    document.querySelectorAll('.prc-prod-ck:checked').forEach(cb => {
+      const compId = cb.dataset.company;
+      if (!byCompany[compId]) byCompany[compId] = [];
+      byCompany[compId].push({
+        product_id: parseInt(cb.value),
+        quantity: parseFloat(document.getElementById(`prc-qty-${compId}-${cb.value}`)?.value || 1) || 1
+      });
+    });
+    const companyIds = Object.keys(byCompany);
+    if (!companyIds.length) { toast('Selecione ao menos um produto', 'error'); return; }
+
+    const title = document.getElementById('pr-title')?.value?.trim();
+    const expires = parseInt(document.getElementById('pr-expires')?.value || 7);
+    const btns = document.querySelectorAll('#pr-form-area .btn-primary, #section-price-request .btn-primary');
+    btns.forEach(b => { b.disabled = true; b.textContent = 'Gerando...'; });
+    try {
+      const results = await Promise.all(companyIds.map(compId => {
+        const payload = { churrascaria_id: parseInt(churrId), company_ids: [parseInt(compId)], items: byCompany[compId] };
+        if (title) payload.title = title;
+        payload.expires_in_days = expires;
+        return API.post('/price-requests', payload);
+      }));
+      this._renderLinks(results.flatMap(r => r.requests));
+    } catch (err) {
+      btns.forEach(b => { b.disabled = false; });
+      toast(err.message || 'Erro ao criar pedido', 'error');
+    }
   },
 
   async _submit(payload) {

@@ -19,6 +19,36 @@ router.get('/', authMiddleware, async (req, res) => {
   }
 });
 
+router.get('/:id/suppliers', authMiddleware, async (req, res) => {
+  const { churrascaria_id } = req.query;
+  if (!churrascaria_id) return res.status(400).json({ error: 'churrascaria_id é obrigatório' });
+  try {
+    const { rows } = await pool.query(`
+      SELECT co.id as company_id, co.name as company_name,
+             p.id as product_id, p.name as product_name, p.unit, p.brand, cp.price
+      FROM company_products cp
+      JOIN companies co ON co.id = cp.company_id AND co.active = 1
+      JOIN products p ON p.id = cp.product_id AND p.active = 1
+      WHERE cp.churrascaria_id = $1 AND cp.active = 1 AND p.category_id = $2
+      ORDER BY co.name, p.name
+    `, [churrascaria_id, req.params.id]);
+
+    const grouped = new Map();
+    rows.forEach(r => {
+      if (!grouped.has(r.company_id)) {
+        grouped.set(r.company_id, { company_id: r.company_id, company_name: r.company_name, products: [] });
+      }
+      grouped.get(r.company_id).products.push({
+        id: r.product_id, name: r.product_name, unit: r.unit, brand: r.brand, price: r.price,
+      });
+    });
+    res.json([...grouped.values()]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
 router.post('/', authMiddleware, requirePermission('manage_categories'), async (req, res) => {
   const { name, color } = req.body;
   if (!name) return res.status(400).json({ error: 'Nome é obrigatório' });
