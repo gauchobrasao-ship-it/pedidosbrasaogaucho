@@ -554,30 +554,34 @@ const PriceRequest = {
           ${suppliers.length} fornecedor(es) encontrado(s) · um link será gerado para cada um, com os produtos que ele já vende
         </div>
         ${suppliers.map(s => `
-          <div style="background:var(--card2);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:10px">
+          <div id="prc-card-${s.company_id}" style="background:var(--card2);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:10px">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:10px">
-              <span style="font-weight:700;color:var(--gold)">${escHtml(s.company_name)}</span>
-              <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--gray);cursor:pointer;white-space:nowrap">
-                <input type="checkbox" checked onchange="PriceRequest._toggleCompanyProducts(${s.company_id}, this.checked)" style="accent-color:var(--gold)">
-                Selecionar todos
+              <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
+                <input type="checkbox" class="prc-company-ck" data-company="${s.company_id}" checked
+                  onchange="PriceRequest._toggleCompany(${s.company_id}, this.checked)"
+                  style="accent-color:var(--gold);width:17px;height:17px;flex-shrink:0">
+                <span style="font-weight:700;color:var(--gold)">${escHtml(s.company_name)}</span>
               </label>
+              <span style="font-size:11px;color:var(--gray);white-space:nowrap">${s.products.length} produto(s)</span>
             </div>
-            ${s.products.map(p => `
-              <div class="product-order-row">
-                <div style="display:flex;align-items:center;gap:10px">
-                  <input type="checkbox" class="prc-prod-ck" data-company="${s.company_id}" value="${p.id}" checked
-                    style="accent-color:var(--gold);width:15px;height:15px;flex-shrink:0">
-                  <div>
-                    <div class="product-order-name">${escHtml(p.name)}</div>
-                    <div style="font-size:11px;color:var(--gray)">${escHtml(p.unit || 'un')}${p.brand ? ' · ' + escHtml(p.brand) : ''} · Atual: ${fmtMoney(p.price)}</div>
+            <div id="prc-products-${s.company_id}">
+              ${s.products.map(p => `
+                <div class="product-order-row">
+                  <div style="display:flex;align-items:center;gap:10px">
+                    <input type="checkbox" class="prc-prod-ck" data-company="${s.company_id}" value="${p.id}" checked
+                      style="accent-color:var(--gold);width:15px;height:15px;flex-shrink:0">
+                    <div>
+                      <div class="product-order-name">${escHtml(p.name)}</div>
+                      <div style="font-size:11px;color:var(--gray)">${escHtml(p.unit || 'un')}${p.brand ? ' · ' + escHtml(p.brand) : ''} · Atual: ${fmtMoney(p.price)}</div>
+                    </div>
                   </div>
-                </div>
-                <div></div>
-                <div>
-                  <input type="number" step="0.5" min="0" class="form-control" style="width:90px"
-                    id="prc-qty-${s.company_id}-${p.id}" value="1" placeholder="Qtd">
-                </div>
-              </div>`).join('')}
+                  <div></div>
+                  <div>
+                    <input type="number" step="0.5" min="0" class="form-control" style="width:90px"
+                      id="prc-qty-${s.company_id}-${p.id}" value="1" placeholder="Qtd">
+                  </div>
+                </div>`).join('')}
+            </div>
           </div>`).join('')}
         ${this._commonFields()}
         <button class="btn btn-primary" onclick="PriceRequest._submitCategoria()">Gerar Links de Cotação →</button>`;
@@ -586,8 +590,13 @@ const PriceRequest = {
     }
   },
 
-  _toggleCompanyProducts(companyId, checked) {
+  _toggleCompany(companyId, checked) {
     document.querySelectorAll(`.prc-prod-ck[data-company="${companyId}"]`).forEach(cb => cb.checked = checked);
+    const products = document.getElementById(`prc-products-${companyId}`);
+    if (products) {
+      products.style.opacity = checked ? '1' : '0.4';
+      products.style.pointerEvents = checked ? 'auto' : 'none';
+    }
   },
 
   _commonFields() {
