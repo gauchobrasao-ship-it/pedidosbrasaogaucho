@@ -590,11 +590,9 @@ const Estoque = {
         return;
       }
       toast(`${createdIds.length} pedido${createdIds.length > 1 ? 's' : ''} criado${createdIds.length > 1 ? 's' : ''}!`);
-      createdIds.forEach((id, idx) => {
-        setTimeout(() => window.open(`/api/orders/${id}/pdf?token=${API.token}`, '_blank'), 400 * idx);
-      });
       if (this._pedidoReturnTo === 'list') this.load();
       else this.openEdit(this._currentListId);
+      this._viewOrders(this._currentListId);
     } catch (err) {
       toast(err.message, 'error');
       if (btn) { btn.disabled = false; btn.textContent = 'Confirmar e Criar Pedido(s)'; }
@@ -606,7 +604,6 @@ const Estoque = {
     try {
       const orders = await API.get(`/orders?stock_list_id=${listId}`);
       if (!orders || !orders.length) { toast('Nenhum pedido encontrado para esta lista', 'warning'); return; }
-      if (orders.length === 1) { Orders.viewPDF(orders[0].id); return; }
       const rows = orders.map(o => `
         <tr>
           <td><span class="badge badge-gold">#${String(o.id).padStart(6, '0')}</span></td>
