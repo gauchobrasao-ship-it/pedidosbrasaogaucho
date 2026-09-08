@@ -196,11 +196,20 @@ router.get('/export', authMiddleware, async (req, res) => {
       ),
       min_price_row AS (
         SELECT DISTINCT ON (cp.product_id)
-               cp.product_id, co.name as min_price_company, cp.updated_at as min_price_updated_at
+               cp.product_id, co.name as min_price_company, cp.updated_at as min_price_updated_at,
+               cp.bulk_price as min_bulk_price, cp.bulk_min_qty as min_bulk_min_qty
         FROM company_products cp
         JOIN companies co ON co.id = cp.company_id AND co.active = 1
         WHERE cp.active = 1 AND cp.price > 0${churrFilter}
         ORDER BY cp.product_id, cp.price ASC
+      ),
+      stock_target_stats AS (
+        SELECT pst.product_id,
+               json_agg(json_build_object('churrascaria_name', ch.name, 'ideal_qty', pst.ideal_qty, 'on_demand', pst.on_demand) ORDER BY ch.name) as stock_targets
+        FROM product_stock_targets pst
+        JOIN churrascarias ch ON ch.id = pst.churrascaria_id
+        WHERE 1=1${churrFilter.replace(/cp\./g, 'pst.')}
+        GROUP BY pst.product_id
       )
       SELECT p.id, p.name, p.brand, p.unit,
              cat.name as category_name,
@@ -208,30 +217,42 @@ router.get('/export', authMiddleware, async (req, res) => {
              ls.company_names,
              ps.min_price,
              mr.min_price_company,
-             mr.min_price_updated_at
+             mr.min_price_updated_at,
+             mr.min_bulk_price, mr.min_bulk_min_qty,
+             sts.stock_targets
       FROM products p
       LEFT JOIN categories cat ON cat.id = p.category_id
       LEFT JOIN link_stats ls ON ls.product_id = p.id
       LEFT JOIN price_stats ps ON ps.product_id = p.id
       LEFT JOIN min_price_row mr ON mr.product_id = p.id
+      LEFT JOIN stock_target_stats sts ON sts.product_id = p.id
       ${productFilter}
       ORDER BY cat.name, p.name
     `, params);
 
     if (format === 'xlsx') {
+      const fmtTargets = (targets) => {
+        const list = (targets || []).filter(t => t.on_demand || (t.ideal_qty !== null && t.ideal_qty !== undefined));
+        if (!list.length) return '';
+        return list.map(t => `${t.churrascaria_name}: ${t.on_demand ? 'S/D' : t.ideal_qty}`).join(' | ');
+      };
       const sheetData = rows.map(p => ({
-        'Produto':              p.name,
-        'Marca':                p.brand || '',
-        'Categoria':            p.category_name || 'Sem categoria',
-        'Unidade':              p.unit || 'un',
-        'Nº Fornecedores':      p.company_count || 0,
-        'Menor Preço (R$)':     p.min_price ? parseFloat(p.min_price).toFixed(2).replace('.', ',') : '',
+        'Produto':                p.name,
+        'Marca':                  p.brand || '',
+        'Categoria':              p.category_name || 'Sem categoria',
+        'Unidade':                p.unit || 'un',
+        'Nº Fornecedores':        p.company_count || 0,
+        'Fornecedores':           (p.company_names || []).join(', '),
+        'Menor Preço (R$)':       p.min_price ? parseFloat(p.min_price).toFixed(2).replace('.', ',') : '',
+        'Preço Volume (R$)':      p.min_bulk_price ? parseFloat(p.min_bulk_price).toFixed(2).replace('.', ',') : '',
+        'Qtd Mín. Volume':        p.min_bulk_min_qty || '',
         'Fornecedor Mais Barato': p.min_price_company || '',
-        'Atualizado em':        p.min_price_updated_at ? new Date(p.min_price_updated_at).toLocaleDateString('pt-BR') : '',
+        'Atualizado em':          p.min_price_updated_at ? new Date(p.min_price_updated_at).toLocaleDateString('pt-BR') : '',
+        'Estoque Máx':            fmtTargets(p.stock_targets),
       }));
       const wb = xlsx.utils.book_new();
       const ws = xlsx.utils.json_to_sheet(sheetData);
-      ws['!cols'] = [40,20,20,10,12,16,30,16].map(w => ({ wch: w }));
+      ws['!cols'] = [40,20,20,10,12,40,16,16,14,30,16,40].map(w => ({ wch: w }));
       xlsx.utils.book_append_sheet(wb, ws, 'Produtos');
       const buf = xlsx.write(wb, { type: 'buffer', bookType: 'xlsx' });
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
