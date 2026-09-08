@@ -172,7 +172,7 @@ router.get('/:id/pdf', async (req, res) => {
     const pdfBuffer = await generateOrderPDF(order);
 
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `inline; filename=pedido-${String(order.id).padStart(6,'0')}.pdf`);
+    res.setHeader('Content-Disposition', `attachment; filename=pedido-${String(order.id).padStart(6,'0')}.pdf`);
     res.send(pdfBuffer);
   } catch (err) {
     console.error(err);
