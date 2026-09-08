@@ -151,12 +151,13 @@ function generateCatalogPDF({ rows, churrascaria_name }) {
 
     // Column x positions and widths
     const COL = {
-      product:  { x: MARGIN,       w: 165 },
-      unit:     { x: MARGIN + 165, w: 25  },
-      company:  { x: MARGIN + 190, w: 140 },
-      price:    { x: MARGIN + 330, w: 65  },
-      bulkQty:  { x: MARGIN + 395, w: 58  },
-      bulkPrice:{ x: MARGIN + 453, w: CW - 453 },
+      product:  { x: MARGIN,       w: 145 },
+      unit:     { x: MARGIN + 145, w: 22  },
+      company:  { x: MARGIN + 167, w: 115 },
+      price:    { x: MARGIN + 282, w: 58  },
+      bulkQty:  { x: MARGIN + 340, w: 52  },
+      bulkPrice:{ x: MARGIN + 392, w: 55  },
+      stock:    { x: MARGIN + 447, w: CW - 447 },
     };
 
     const ROW_H = 18;
@@ -182,7 +183,8 @@ function generateCatalogPDF({ rows, churrascaria_name }) {
         .text('FORNECEDOR',     COL.company.x,        y + 6, { width: COL.company.w })
         .text('PREÇO UNIT.',    COL.price.x,          y + 6, { width: COL.price.w })
         .text('EMB. A PARTIR',  COL.bulkQty.x,        y + 6, { width: COL.bulkQty.w })
-        .text('PREÇO EMB.',     COL.bulkPrice.x,      y + 6, { width: COL.bulkPrice.w });
+        .text('PREÇO EMB.',     COL.bulkPrice.x,      y + 6, { width: COL.bulkPrice.w })
+        .text('ESTQ. MÁX',      COL.stock.x,          y + 6, { width: COL.stock.w });
       return y + TH_H;
     }
 
@@ -235,6 +237,11 @@ function generateCatalogPDF({ rows, churrascaria_name }) {
             doc.text(prod.name, COL.product.x + 6, y + 5, { width: COL.product.w - 6, ellipsis: true });
             doc.font('Helvetica')
               .text(prod.unit || '-', COL.unit.x, y + 5, { width: COL.unit.w });
+
+            const stockText = s.stock_on_demand ? 'S/D' : (s.stock_ideal_qty != null ? String(s.stock_ideal_qty) : '—');
+            doc.fillColor(s.stock_on_demand ? COLORS.orange : COLORS.dark)
+              .text(stockText, COL.stock.x, y + 5, { width: COL.stock.w });
+            doc.fillColor(COLORS.dark);
           }
 
           doc.font('Helvetica')

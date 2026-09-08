@@ -143,7 +143,7 @@ const Reports = {
       for (const [catName, prodMap] of catMap) {
         html += `<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--gold);padding:10px 0 5px;border-bottom:1px solid var(--border);margin-bottom:4px;margin-top:12px">${escHtml(catName)}</div>`;
         html += `<table style="margin-bottom:0"><thead><tr>
-          <th>Produto</th><th>Un</th><th>Fornecedor</th><th>Preço Unit.</th><th>Emb. a partir</th><th>Preço Emb.</th>
+          <th>Produto</th><th>Un</th><th>Fornecedor</th><th>Preço Unit.</th><th>Emb. a partir</th><th>Preço Emb.</th><th>Estoque Máx</th>
         </tr></thead><tbody>`;
         for (const [, prod] of prodMap) {
           prod.suppliers.forEach((s, si) => {
@@ -154,6 +154,7 @@ const Reports = {
               <td class="text-gold">${fmtMoney(s.price)}</td>
               <td style="color:var(--gray)">${s.bulk_min_qty ? `${s.bulk_min_qty} ${escHtml(prod.unit || 'un')}` : '—'}</td>
               <td>${s.bulk_price ? `<span class="text-gold">${fmtMoney(s.bulk_price)}</span>` : '—'}</td>
+              <td>${si === 0 ? (s.stock_on_demand ? '<span style="color:var(--orange);font-weight:600">S/D</span>' : (s.stock_ideal_qty != null ? escHtml(String(s.stock_ideal_qty)) : '<span style="color:var(--gray)">—</span>')) : ''}</td>
             </tr>`;
           });
         }

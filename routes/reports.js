@@ -185,11 +185,13 @@ async function fetchCatalogRows(churrascaria_id, category_ids) {
       COALESCE(cat.name, 'Sem Categoria') AS category_name,
       p.id AS product_id, p.name AS product_name, p.unit, p.brand,
       c.id AS company_id, c.name AS company_name,
-      cp.price, cp.bulk_min_qty, cp.bulk_price, cp.updated_at
+      cp.price, cp.bulk_min_qty, cp.bulk_price, cp.updated_at,
+      pst.ideal_qty AS stock_ideal_qty, pst.on_demand AS stock_on_demand
     FROM company_products cp
     JOIN products p ON p.id = cp.product_id AND p.active = 1
     LEFT JOIN categories cat ON cat.id = p.category_id
     JOIN companies c ON c.id = cp.company_id AND c.active = 1
+    LEFT JOIN product_stock_targets pst ON pst.product_id = p.id AND pst.churrascaria_id = $1
     WHERE cp.churrascaria_id = $1
       AND cp.active = 1
       AND cp.price > 0
