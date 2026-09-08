@@ -298,11 +298,12 @@ function generateProductsPDF(products) {
     const TH_H  = 20;
 
     const COL = {
-      name:     { x: MARGIN,       w: 195 },
-      category: { x: MARGIN + 195, w: 100 },
-      unit:     { x: MARGIN + 295, w: 30  },
-      company:  { x: MARGIN + 325, w: 100 },
-      price:    { x: MARGIN + 425, w: CW - 425 },
+      name:     { x: MARGIN,       w: 170 },
+      category: { x: MARGIN + 170, w: 85  },
+      unit:     { x: MARGIN + 255, w: 25  },
+      company:  { x: MARGIN + 280, w: 85  },
+      price:    { x: MARGIN + 365, w: 65  },
+      stock:    { x: MARGIN + 430, w: CW - 430 },
     };
 
     // Header
@@ -320,8 +321,15 @@ function generateProductsPDF(products) {
         .text('CATEGORIA',      COL.category.x,      y + 6, { width: COL.category.w })
         .text('UN',             COL.unit.x,           y + 6, { width: COL.unit.w })
         .text('FORNECEDOR',     COL.company.x,        y + 6, { width: COL.company.w })
-        .text('MENOR PREÇO',    COL.price.x,          y + 6, { width: COL.price.w });
+        .text('MENOR PREÇO',    COL.price.x,          y + 6, { width: COL.price.w })
+        .text('ESTOQUE MÁX',    COL.stock.x,          y + 6, { width: COL.stock.w });
       return y + TH_H;
+    }
+
+    function fmtStockTargets(targets) {
+      const list = (targets || []).filter(t => t.on_demand || (t.ideal_qty !== null && t.ideal_qty !== undefined));
+      if (!list.length) return '';
+      return list.map(t => `${t.churrascaria_name}: ${t.on_demand ? 'S/D' : t.ideal_qty}`).join(' | ');
     }
 
     // Group by category
@@ -375,6 +383,14 @@ function generateProductsPDF(products) {
         } else {
           doc.fillColor(COLORS.gray).font('Helvetica')
             .text('—', COL.price.x, y + 6, { width: COL.price.w });
+        }
+        const stockText = fmtStockTargets(p.stock_targets);
+        if (stockText) {
+          doc.fillColor(COLORS.dark).font('Helvetica').fontSize(7)
+            .text(stockText, COL.stock.x, y + 6, { width: COL.stock.w, ellipsis: true });
+        } else {
+          doc.fillColor(COLORS.gray).font('Helvetica').fontSize(8)
+            .text('—', COL.stock.x, y + 6, { width: COL.stock.w });
         }
         y += ROW_H;
         rowIdx++;
