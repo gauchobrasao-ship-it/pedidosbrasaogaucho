@@ -82,11 +82,33 @@ const Orders = {
     document.getElementById('orders-table-wrap').innerHTML = this.renderTable(orders);
   },
 
-  viewPDF(id) {
+  // PWA instalado na tela inicial roda sem barra de navegador (sem botão de
+  // compartilhar/3 pontinhos), então window.open/wa.me não dão opção nenhuma
+  // ao usuário. navigator.share abre a folha de compartilhamento nativa do
+  // sistema (inclui WhatsApp como opção, enviando o arquivo de verdade, não
+  // um link) mesmo nesse modo standalone. Retorna true se conseguiu.
+  async _tryNativeShare(id) {
+    if (!navigator.canShare) return false;
+    try {
+      const filename = `pedido-${String(id).padStart(6, '0')}.pdf`;
+      const res = await fetch(`/api/orders/${id}/pdf?token=${API.token}`);
+      const blob = await res.blob();
+      const file = new File([blob], filename, { type: 'application/pdf' });
+      if (!navigator.canShare({ files: [file] })) return false;
+      await navigator.share({ files: [file], title: `Pedido #${String(id).padStart(6, '0')} - Brasão Gaúcho` });
+      return true;
+    } catch (err) {
+      return err?.name === 'AbortError'; // cancelou a folha: não cair no fallback
+    }
+  },
+
+  async viewPDF(id) {
+    if (await this._tryNativeShare(id)) return;
     window.open(`/api/orders/${id}/pdf?token=${API.token}`, '_blank');
   },
 
-  shareWhatsApp(id) {
+  async shareWhatsApp(id) {
+    if (await this._tryNativeShare(id)) return;
     const url = `${window.location.origin}/api/orders/${id}/pdf`;
     const msg = encodeURIComponent(`Pedido #${String(id).padStart(6,'0')} - Brasão Gaúcho\nVer PDF: ${url}`);
     window.open(`https://wa.me/?text=${msg}`, '_blank');
